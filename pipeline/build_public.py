@@ -142,10 +142,16 @@ def _live_dataset(universe, selected_tickers, years=5):
     start_d = date(today.year - years, 1, 1) - timedelta(days=14)
     store = OfficialStore(ROOT / 'data_raw')
 
-    target_codes = {
-        m['ticker'] for m in universe['tickers']
-        if not selected_tickers or m['ticker'] in selected_tickers
-    }
+    if selected_tickers is not None:
+        target_codes = {
+            m['ticker'] for m in universe['tickers']
+            if m['ticker'] in selected_tickers
+        }
+    else:
+        target_codes = {
+            m['ticker'] for m in universe['tickers']
+            if m.get('enabled', True)
+        }
     print(f'[live] Fetching TAIEX TR & PR ({start_d} ~ {end_d})...', flush=True)
     taiex_tr = store.fetch_taiex_total_return(start_d, end_d, today=today)
     taiex_pr = store.fetch_taiex_price_index(start_d, end_d, today=today)
@@ -398,7 +404,9 @@ def main():
     parser = argparse.ArgumentParser(description='Build public derived-index JSON artifacts.')
     parser.add_argument('--synthetic', action='store_true', help='Generate deterministic synthetic dataset (offline)')
     parser.add_argument('--tickers', type=str, default='', help='Comma-separated ticker subset for pilot runs')
+    parser.add_argument('--all', action='store_true', help='Include all tickers in universe.json regardless of enabled flag')
     parser.add_argument('--years', type=int, default=5, help='History depth in years (default: 5)')
+    parser.add_argument('--keep-versions', type=int, default=5, help='Max versioned snapshots to retain under web/data/v (default: 5, 0=keep all)')
     parser.add_argument('--out', type=str, default=str(ROOT / 'web' / 'data'), help='Output directory')
     args = parser.parse_args()
 
@@ -406,10 +414,22 @@ def main():
     if args.synthetic:
         dataset = _synthetic_dataset(universe, years=args.years)
     else:
-        subset = {t.strip().upper() for t in args.tickers.split(',') if t.strip()} if args.tickers else None
+        if args.all:
+            subset = {m['ticker'] for m in universe['tickers']}
+        elif args.tickers:
+            subset = {t.strip().upper() for t in args.tickers.split(',') if t.strip()}
+        else:
+            subset = None
         dataset = _live_dataset(universe, subset, years=args.years)
 
     manifest = build_artifacts(dataset, universe, Path(args.out))
+    if args.keep_versions > 0:
+        import shutil
+        v_root = Path(args.out) / 'v'
+        if v_root.exists():
+            dirs = sorted([d for d in v_root.iterdir() if d.is_dir()], key=lambda d: d.name)
+            for old_dir in dirs[:-args.keep_versions]:
+                shutil.rmtree(old_dir, ignore_errors=True)
     print(json.dumps({
         'status': 'OK',
         'version': manifest['version'],

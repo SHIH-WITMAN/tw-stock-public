@@ -436,10 +436,6 @@ function bindControls() {
     state.focused.clear();
     renderTrendOutput();
   });
-  document.getElementById('chart-title-input').addEventListener('input', (e) => {
-    state.customTitle = e.target.value.trim().slice(0, 40);
-    renderTrendOutput();
-  });
 
   document.querySelectorAll('[data-range]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -478,25 +474,6 @@ function bindControls() {
   };
   document.getElementById('btn-share-latest').addEventListener('click', () => copyShare(false));
   document.getElementById('btn-share-snap').addEventListener('click', () => copyShare(true));
-
-  document.getElementById('btn-png').addEventListener('click', () => {
-    const computed = state.lastComputed;
-    if (!computed || !computed.series.length) return;
-    const ordered = orderCards(computed.series, state.benchmark);
-    const colors = assignColors(ordered, state.benchmark, state.theme);
-    const visibleSeries = state.focused.size > 0 ? ordered.filter((s) => state.focused.has(s.ticker)) : ordered;
-    exportPngCard({
-      title: document.getElementById('result-heading').textContent,
-      subtitle: `${computed.actualStart} ～ ${computed.actualEnd}（${computed.dates.length} 交易日）`,
-      modeLabel: state.mode === 'price_only' ? '純價差報酬' : '含息報酬（除息日收盤再投入，未扣個人稅費）',
-      dates: computed.dates,
-      visibleSeries,
-      colors,
-      benchmarkTicker: state.benchmark,
-      theme: state.theme,
-      footerText: `資料截至 ${state.manifest.data_date} ｜ 來源：TWSE／TPEx 衍生指數（${state.manifest.algorithm_version}）｜ 僅供歷史數據參考，非投資建議`,
-    });
-  });
 
   // Config export / import (cross-device sync without login/Firestore!)
   document.getElementById('btn-export-cfg').addEventListener('click', () => {
@@ -606,7 +583,6 @@ async function init() {
   document.getElementById('calc-mode').value = state.mode;
   document.getElementById('start-date').value = state.startDate;
   document.getElementById('end-date').value = state.endDate;
-  document.getElementById('chart-title-input').value = state.customTitle;
 
   renderPresets();
   renderPicker();
