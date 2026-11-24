@@ -1,0 +1,75 @@
+{
+  "version": "1.0.0",
+  "note": "Phase 1 公開試跑名單（30 檔代表 ETF＋10 檔權值個股）。刻意納入分割、現金減資、上櫃債券與國外成分標的以驗證罕見公司事件。僅含目前掛牌標的（存續偏誤須於畫面明示）。",
+  "presets": [
+    {
+      "id": "market_vs_highdiv",
+      "label": "市值型 vs 高股息型",
+      "tickers": ["0050", "006208", "0056", "00878", "00713", "00919"],
+      "include_market": true
+    },
+    {
+      "id": "tech_etf_and_leaders",
+      "label": "台股科技 ETF 與權值股",
+      "tickers": ["0050", "0052", "00881", "00891", "2330", "2317", "2454"],
+      "include_market": true
+    },
+    {
+      "id": "us_equity_etf",
+      "label": "美股成分 ETF 觀察",
+      "tickers": ["00646", "00662", "00757", "00830", "0050"],
+      "include_market": false
+    },
+    {
+      "id": "bond_etf",
+      "label": "美債與投資級債券 ETF",
+      "tickers": ["00679B", "00687B", "00720B", "00772B", "00937B", "00933B"],
+      "include_market": false
+    }
+  ],
+  "tickers": [
+    {"ticker": "0050", "name": "元大台灣50", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "006208", "name": "富邦台50", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00850", "name": "元大臺灣ESG永續", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00922", "name": "國泰台灣領袖50", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00923", "name": "群益台ESG低碳50", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00905", "name": "FT臺灣Smart", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "0052", "name": "富邦科技", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00881", "name": "國泰台灣科技龍頭", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00891", "name": "中信關鍵半導體", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00894", "name": "中信小資高價30", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00935", "name": "野村臺灣新科技50", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "0056", "name": "元大高股息", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00878", "name": "國泰永續高股息", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00713", "name": "元大台灣高息低波", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00919", "name": "群益台灣精選高息", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00918", "name": "大華優利高填息30", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00929", "name": "復華台灣科技優息", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "00915", "name": "凱基優選高股息30", "market": "TWSE", "type": "ETF", "category": "tw_equity", "category_label": "台股股票型", "benchmark_eligible": true, "has_price_limit": true},
+
+    {"ticker": "00646", "name": "元大S&P500", "market": "TWSE", "type": "ETF", "category": "foreign_equity", "category_label": "國外成分股", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00662", "name": "富邦NASDAQ", "market": "TWSE", "type": "ETF", "category": "foreign_equity", "category_label": "國外成分股", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00757", "name": "統一FANG+", "market": "TWSE", "type": "ETF", "category": "foreign_equity", "category_label": "國外成分股", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00830", "name": "國泰費城半導體", "market": "TWSE", "type": "ETF", "category": "foreign_equity", "category_label": "國外成分股", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00645", "name": "富邦日本", "market": "TWSE", "type": "ETF", "category": "foreign_equity", "category_label": "國外成分股", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00924", "name": "復華S&P500成長", "market": "TWSE", "type": "ETF", "category": "foreign_equity", "category_label": "國外成分股", "benchmark_eligible": false, "has_price_limit": false},
+
+    {"ticker": "00679B", "name": "元大美債20年", "market": "TPEx", "type": "ETF", "category": "bond", "category_label": "債券型", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00687B", "name": "國泰20年美債", "market": "TPEx", "type": "ETF", "category": "bond", "category_label": "債券型", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00720B", "name": "元大投資級公司債", "market": "TPEx", "type": "ETF", "category": "bond", "category_label": "債券型", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00772B", "name": "中信高評級公司債", "market": "TPEx", "type": "ETF", "category": "bond", "category_label": "債券型", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00937B", "name": "群益ESG投等債20+", "market": "TPEx", "type": "ETF", "category": "bond", "category_label": "債券型", "benchmark_eligible": false, "has_price_limit": false},
+    {"ticker": "00933B", "name": "國泰10Y+金融債", "market": "TPEx", "type": "ETF", "category": "bond", "category_label": "債券型", "benchmark_eligible": false, "has_price_limit": false},
+
+    {"ticker": "2330", "name": "台積電", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2317", "name": "鴻海", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2454", "name": "聯發科", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2308", "name": "台達電", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2881", "name": "富邦金", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2882", "name": "國泰金", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2303", "name": "聯電", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2412", "name": "中華電", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2603", "name": "長榮", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true},
+    {"ticker": "2327", "name": "國巨", "market": "TWSE", "type": "STOCK", "category": "tw_stock", "category_label": "台股權值股", "benchmark_eligible": true, "has_price_limit": true}
+  ]
+}

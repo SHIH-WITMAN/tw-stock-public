@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>台股與 ETF 含息報酬趨勢觀察（Phase 1 試跑版）</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>台股含息趨勢觀察</h1>
+        <span id="data-date-badge" class="badge">資料載入中…</span>
+      </div>
+      <nav class="nav" aria-label="主導覽">
+        <button class="btn active" data-tab="trend" type="button">含息趨勢</button>
+        <button class="btn" data-tab="etf" type="button">ETF 年度報酬</button>
+        <button class="btn" data-tab="status" type="button">資料狀態與口徑</button>
+        <button id="theme-toggle" class="btn" type="button">深色主題</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="snapshot-banner" class="notice hidden"></div>
+
+    <!-- Tab 1: Return Trend -->
+    <section id="tab-trend">
+      <div class="panel">
+        <div class="panel-title">
+          <span>比較標的（單次上限 9 檔含大盤）</span>
+          <span id="selected-counter" class="muted"></span>
+        </div>
+        <div class="row" id="preset-bar"></div>
+        <div class="row" style="margin-top:8px">
+          <input id="ticker-search" class="input" type="search" placeholder="搜尋代號或名稱（如 0050、2330）" maxlength="30">
+          <select id="cat-filter" class="select">
+            <option value="all">全部類別</option>
+            <option value="tw_equity">台股股票型 ETF</option>
+            <option value="foreign_equity">國外成分股 ETF</option>
+            <option value="bond">債券型 ETF</option>
+            <option value="tw_stock">台股權值股</option>
+          </select>
+          <label class="row muted" style="gap:4px">
+            <input id="include-market" type="checkbox" checked> 加入大盤（TAIEX）
+          </label>
+          <button id="btn-clear" class="btn" type="button">清除選取</button>
+          <button id="btn-export-cfg" class="btn" type="button">匯出組合</button>
+          <button id="btn-import-cfg" class="btn" type="button">匯入組合</button>
+          <input id="import-file" type="file" accept="application/json" class="hidden">
+        </div>
+        <div id="ticker-grid" class="ticker-grid"></div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div class="row">
+          <label class="muted">起始日 <input id="start-date" class="input" type="date"></label>
+          <label class="muted">結束日 <input id="end-date" class="input" type="date"></label>
+          <select id="calc-mode" class="select">
+            <option value="total_return">含息報酬（除息日收盤再投入）</option>
+            <option value="price_only">純價差報酬（已調分割／配股／減資）</option>
+          </select>
+          <select id="benchmark-select" class="select"></select>
+          <input id="chart-title-input" class="input" type="text" placeholder="自訂圖卡標題（選填）" maxlength="40">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <span class="muted">快捷區間：</span>
+          <button class="btn" data-range="1m" type="button">近 1 月</button>
+          <button class="btn" data-range="3m" type="button">近 3 月</button>
+          <button class="btn" data-range="6m" type="button">近 6 月</button>
+          <button class="btn" data-range="ytd" type="button">今年以來</button>
+          <button class="btn" data-range="1y" type="button">近 1 年</button>
+          <button class="btn" data-range="3y" type="button">近 3 年</button>
+          <button class="btn" data-range="5y" type="button">近 5 年</button>
+          <button id="btn-share-latest" class="btn" type="button">複製最新分享連結</button>
+          <button id="btn-share-snap" class="btn" type="button">複製固定快照連結</button>
+          <button id="btn-png" class="btn primary" type="button">匯出 PNG 圖卡</button>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div class="panel-title">
+          <span id="result-heading">區間累積報酬比較</span>
+          <span class="row">
+            <span id="result-meta" class="muted"></span>
+            <button id="btn-reset-focus" class="btn hidden" type="button">顯示全部曲線</button>
+          </span>
+        </div>
+        <div id="cards-grid" class="cards-grid"></div>
+        <div class="chart-wrap">
+          <canvas id="trend-canvas"></canvas>
+          <div id="chart-tooltip" class="tooltip" hidden></div>
+        </div>
+        <div id="halt-note" class="notice hidden" style="margin-top:10px"></div>
+        <div id="excluded-box" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <!-- Tab 2: ETF Calendar Returns -->
+    <section id="tab-etf" class="hidden">
+      <div class="panel">
+        <div class="panel-title">
+          <span>ETF 曆年度與滾動含息報酬（與含息趨勢頁共用同一衍生指數）</span>
+          <span class="row">
+            <select id="etf-cat-filter" class="select">
+              <option value="all">全部 ETF</option>
+              <option value="tw_equity">台股股票型（可比台股大盤）</option>
+              <option value="foreign_equity">國外成分股（不比台股大盤）</option>
+              <option value="bond">債券型（不比台股大盤）</option>
+            </select>
+            <select id="etf-sort" class="select">
+              <option value="ticker">預設：代號升冪（中性）</option>
+              <option value="1y">近 1 年含息降冪</option>
+              <option value="ytd">今年以來含息降冪</option>
+              <option value="wins">勝大盤次數（僅台股股票型）</option>
+            </select>
+          </span>
+        </div>
+        <div id="survivorship-notice" class="notice" style="margin-bottom:10px"></div>
+        <div id="category-median-bar" class="muted" style="margin-bottom:8px"></div>
+        <div class="table-wrap">
+          <table id="etf-table"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Status & Methodology -->
+    <section id="tab-status" class="hidden">
+      <div class="panel">
+        <div class="panel-title"><span>資料狀態、來源顯名與計算口徑</span></div>
+        <div id="status-body"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>本工具為非營利歷史數據計算示範，僅發布衍生累積指數，不構成任何有價證券推介或投資建議；歷史績效不代表未來表現。</div>
+  </footer>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
