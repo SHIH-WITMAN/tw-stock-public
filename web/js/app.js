@@ -1,15 +1,22 @@
 /**
- * Main UI controller for tw-stock-public Phase 1.
+ * Main UI controller for tw-stock-public Phase 1 (Layout A).
  * Strict zero-innerHTML DOM construction (XSS-safe by construction).
  */
 import {
-  MAX_SERIES, MARKET_TICKER, TICKER_RE,
+  MAX_SERIES, MARKET_TICKER,
   assignColors, computeTrendComparison, orderCards, diffSummary,
   toggleFocus, rangeStartDate, encodeShareParams, decodeShareParams,
 } from './model.js';
-import { TrendChart, exportPngCard } from './chart.js';
+import { TrendChart } from './chart.js';
 
 const STORAGE_KEY = 'tw_stock_public_picks_v1';
+const CATEGORY_GROUPS = [
+  { key: 'tw_equity', label: '台股股票型 ETF' },
+  { key: 'foreign_equity', label: '國外成分股 ETF' },
+  { key: 'bond', label: '債券型 ETF' },
+  { key: 'tw_stock', label: '台股權值股' },
+  { key: 'all', label: '全部已收錄' },
+];
 
 const state = {
   manifest: null,
@@ -22,10 +29,11 @@ const state = {
   mode: 'total_return',
   startDate: '',
   endDate: '',
-  customTitle: '',
   focused: new Set(),
   theme: 'light',
   activeTab: 'trend',
+  drawerOpen: false,
+  drawerCat: 'tw_equity',
   snapshotMode: null,
   lastComputed: null,
 };
@@ -81,6 +89,24 @@ function loadLocalPicks(validSet) {
   } catch { /* ignore */ }
 }
 
+function toggleTickerSelection(ticker) {
+  const maxT = MAX_SERIES - (state.includeMarket ? 1 : 0);
+  if (state.selected.includes(ticker)) {
+    state.selected = state.selected.filter((t) => t !== ticker);
+    if (state.benchmark === ticker) state.benchmark = state.includeMarket ? MARKET_TICKER : '';
+  } else {
+    if (state.selected.length >= maxT) {
+      alert(`單次最多比較 ${MAX_SERIES} 檔（目前${state.includeMarket ? '含大盤' : '不含大盤'}上限 ${maxT} 檔）。`);
+      return;
+    }
+    state.selected = [...state.selected, ticker];
+  }
+  state.focused.clear();
+  saveLocalPicks();
+  renderPicker();
+  updateChart();
+}
+
 function renderPresets() {
   const bar = document.getElementById('preset-bar');
   bar.textContent = '';
@@ -102,48 +128,157 @@ function renderPresets() {
   }
 }
 
-function renderPicker() {
+function renderSelectedChips(byCode) {
+  const box = document.getElementById('selected-chips');
+  box.textContent = '';
+  box.appendChild(el('span', { class: 'muted', style: 'margin-right:4px' }, '目前已選：'));
+
+  if (state.includeMarket) {
+    const mPill = el('button', {
+      type: 'button',
+      class: 'sel-pill market-pill',
+      title: '點擊可取消大盤趨勢',
+    });
+    mPill.appendChild(el('code', {}, 'TAIEX'));
+    mPill.appendChild(el('span', {}, state.mode === 'price_only' ? '加權股價指數' : '加權報酬指數'));
+    mPill.appendChild(el('span', { class: 'pill-x' }, '✕'));
+    mPill.addEventListener('click', () => {
+      state.includeMarket = false;
+      document.getElementById('include-market').checked = false;
+      if (state.benchmark === MARKET_TICKER) state.benchmark = state.selected[0] || '';
+      state.focused.clear();
+      saveLocalPicks();
+      renderPicker();
+      updateChart();
+    });
+    box.appendChild(mPill);
+  }
+
+  for (const code of state.selected) {
+    const meta = byCode.get(code);
+    const pill = el('button', {
+      type: 'button',
+      class: 'sel-pill',
+      title: `點擊移除 ${code}`,
+    });
+    pill.appendChild(el('code', {}, code));
+    pill.appendChild(el('span', {}, meta ? meta.name : ''));
+    pill.appendChild(el('span', { class: 'pill-x' }, '✕'));
+    pill.addEventListener('click', () => toggleTickerSelection(code));
+    box.appendChild(pill);
+  }
+
+  if (!state.includeMarket && state.selected.length === 0) {
+    box.appendChild(el('span', { class: 'muted' }, '尚未選擇任何標的（請由下方搜尋或展開分類點選）'));
+  }
+}
+
+function renderSearchDropdown() {
+  const input = document.getElementById('ticker-search');
+  const drop = document.getElementById('search-dropdown');
+  const query = input.value.trim().toUpperCase();
+  if (!query) {
+    drop.classList.add('hidden');
+    drop.textContent = '';
+    return;
+  }
+
+  const matches = state.catalog.items.filter(
+    (item) => item.ticker.includes(query) || item.name.toUpperCase().includes(query) || item.category_label.includes(query),
+  ).slice(0, 12);
+
+  drop.textContent = '';
+  if (matches.length === 0) {
+    drop.appendChild(el('div', { class: 'muted', style: 'padding:8px 10px' }, '找不到符合之已收錄標的'));
+  } else {
+    for (const item of matches) {
+      const isSel = state.selected.includes(item.ticker);
+      const row = el('button', {
+        type: 'button',
+        class: `search-item${isSel ? ' selected' : ''}`,
+      });
+      const left = el('span', {});
+      left.appendChild(el('strong', { style: 'font-family:ui-monospace,monospace;margin-right:6px' }, item.ticker));
+      left.appendChild(el('span', {}, item.name));
+      const right = el('span', { class: 'muted' }, `${item.category_label} · ${isSel ? '已選 ✓' : '＋加入'}`);
+      row.append(left, right);
+      row.addEventListener('click', () => {
+        toggleTickerSelection(item.ticker);
+        input.value = '';
+        drop.classList.add('hidden');
+      });
+      drop.appendChild(row);
+    }
+  }
+  drop.classList.remove('hidden');
+}
+
+function renderCategoryDrawer() {
+  const drawer = document.getElementById('category-drawer');
+  const toggleBtn = document.getElementById('btn-toggle-drawer');
+  const totalCount = state.catalog.items.length;
+  toggleBtn.textContent = state.drawerOpen
+    ? `▲ 收合分類清單（共 ${totalCount} 檔）`
+    : `▼ 展開分類瀏覽標的（共 ${totalCount} 檔）`;
+  toggleBtn.setAttribute('aria-expanded', state.drawerOpen ? 'true' : 'false');
+  drawer.classList.toggle('hidden', !state.drawerOpen);
+
+  const tabsBox = document.getElementById('drawer-cat-tabs');
+  tabsBox.textContent = '';
+  const counts = {};
+  for (const item of state.catalog.items) {
+    counts[item.category] = (counts[item.category] || 0) + 1;
+  }
+  counts.all = totalCount;
+
+  // Ensure active drawer category has items
+  if (state.drawerCat !== 'all' && !counts[state.drawerCat]) {
+    const firstNonEmpty = CATEGORY_GROUPS.find((g) => counts[g.key] > 0);
+    state.drawerCat = firstNonEmpty ? firstNonEmpty.key : 'all';
+  }
+
+  for (const grp of CATEGORY_GROUPS) {
+    const c = counts[grp.key] || 0;
+    if (c === 0 && grp.key !== 'all') continue;
+    const tBtn = el('button', {
+      type: 'button',
+      class: `cat-tab${state.drawerCat === grp.key ? ' active' : ''}`,
+    }, `${grp.label} (${c})`);
+    tBtn.addEventListener('click', () => {
+      state.drawerCat = grp.key;
+      renderCategoryDrawer();
+    });
+    tabsBox.appendChild(tBtn);
+  }
+
   const grid = document.getElementById('ticker-grid');
-  const query = document.getElementById('ticker-search').value.trim().toUpperCase();
-  const cat = document.getElementById('cat-filter').value;
   grid.textContent = '';
-
-  const maxT = MAX_SERIES - (state.includeMarket ? 1 : 0);
-  const totalSelected = state.selected.length + (state.includeMarket ? 1 : 0);
-  document.getElementById('selected-counter').textContent = `已選 ${state.selected.length}/${maxT} 檔（含大盤共 ${totalSelected}/${MAX_SERIES}）`;
-
-  const items = state.catalog.items.filter((item) => {
-    if (cat !== 'all' && item.category !== cat) return false;
-    if (query && !item.ticker.includes(query) && !item.name.toUpperCase().includes(query)) return false;
-    return true;
-  });
-
+  const items = state.catalog.items.filter(
+    (item) => state.drawerCat === 'all' || item.category === state.drawerCat,
+  );
   for (const item of items) {
     const isSel = state.selected.includes(item.ticker);
     const chip = el('button', {
       type: 'button',
       class: `ticker-chip${isSel ? ' selected' : ''}`,
     });
-    chip.appendChild(el('strong', {}, `${item.ticker} ${item.name}`));
-    chip.appendChild(el('span', {}, `${item.category_label} · ${item.market}`));
-    chip.addEventListener('click', () => {
-      if (isSel) {
-        state.selected = state.selected.filter((t) => t !== item.ticker);
-        if (state.benchmark === item.ticker) state.benchmark = state.includeMarket ? MARKET_TICKER : '';
-      } else {
-        if (state.selected.length >= maxT) {
-          alert(`單次最多比較 ${MAX_SERIES} 檔（目前${state.includeMarket ? '含大盤' : '不含大盤'}上限 ${maxT} 檔）。`);
-          return;
-        }
-        state.selected = [...state.selected, item.ticker];
-      }
-      state.focused.clear();
-      saveLocalPicks();
-      renderPicker();
-      updateChart();
-    });
+    chip.appendChild(el('strong', {}, item.ticker));
+    chip.appendChild(el('span', {}, item.name));
+    if (isSel) chip.appendChild(el('span', {}, '✓'));
+    chip.addEventListener('click', () => toggleTickerSelection(item.ticker));
     grid.appendChild(chip);
   }
+}
+
+function renderPicker() {
+  const maxT = MAX_SERIES - (state.includeMarket ? 1 : 0);
+  const totalSelected = state.selected.length + (state.includeMarket ? 1 : 0);
+  document.getElementById('selected-counter').textContent = `已選 ${state.selected.length}/${maxT} 檔（含大盤共 ${totalSelected}/${MAX_SERIES}）`;
+
+  const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
+  renderSelectedChips(byCode);
+  renderCategoryDrawer();
+  renderSearchDropdown();
 
   // Update benchmark select options
   const bSel = document.getElementById('benchmark-select');
@@ -152,7 +287,6 @@ function renderPicker() {
   if (state.includeMarket) {
     bSel.appendChild(el('option', { value: MARKET_TICKER }, `基準：${state.mode === 'price_only' ? '加權股價指數' : '加權報酬指數'}`));
   }
-  const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
   for (const t of state.selected) {
     const meta = byCode.get(t);
     bSel.appendChild(el('option', { value: t }, `基準：${t} ${meta ? meta.name : ''}`));
@@ -177,7 +311,7 @@ function renderTrendOutput() {
   document.getElementById('btn-reset-focus').classList.toggle('hidden', state.focused.size === 0);
 
   const modeLabel = state.mode === 'price_only' ? '純價差報酬' : '含息報酬（除息日收盤再投入）';
-  const defaultTitle = state.customTitle || `${ordered.slice(0, 3).map((s) => (s.is_market ? s.name : s.ticker)).join('、')}${ordered.length > 3 ? ` 等 ${ordered.length} 檔` : ''}｜區間比較`;
+  const defaultTitle = `${ordered.slice(0, 3).map((s) => (s.is_market ? s.name : s.ticker)).join('、')}${ordered.length > 3 ? ` 等 ${ordered.length} 檔` : ''}｜區間比較`;
   document.getElementById('result-heading').textContent = defaultTitle;
   document.getElementById('result-meta').textContent = computed.actualStart
     ? `${computed.actualStart} ～ ${computed.actualEnd}（${computed.dates.length} 交易日 · ${modeLabel}）`
@@ -278,7 +412,6 @@ function renderEtfTable() {
   const years = state.catalog.years || [];
   document.getElementById('survivorship-notice').textContent = state.catalog.survivorship_notice || '';
 
-  // Show category median note for bond / foreign_equity
   const medBar = document.getElementById('category-median-bar');
   const medians = state.catalog.category_medians || {};
   if (cat === 'bond' || cat === 'foreign_equity') {
@@ -397,8 +530,21 @@ function bindControls() {
     renderTrendOutput();
   });
 
-  document.getElementById('ticker-search').addEventListener('input', renderPicker);
-  document.getElementById('cat-filter').addEventListener('change', renderPicker);
+  const searchInput = document.getElementById('ticker-search');
+  searchInput.addEventListener('input', renderSearchDropdown);
+  searchInput.addEventListener('focus', renderSearchDropdown);
+  document.addEventListener('click', (e) => {
+    const wrap = searchInput.closest('.search-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById('search-dropdown').classList.add('hidden');
+    }
+  });
+
+  document.getElementById('btn-toggle-drawer').addEventListener('click', () => {
+    state.drawerOpen = !state.drawerOpen;
+    renderCategoryDrawer();
+  });
+
   document.getElementById('include-market').addEventListener('change', (e) => {
     state.includeMarket = e.target.checked;
     const maxT = MAX_SERIES - (state.includeMarket ? 1 : 0);
@@ -461,7 +607,7 @@ function bindControls() {
       endDate: state.endDate,
       mode: state.mode,
       benchmark: state.benchmark,
-      title: state.customTitle,
+      title: '',
       snapshotVersion: pinSnapshot ? state.manifest.version : null,
     });
     const url = `${window.location.origin}${window.location.pathname}?${qs}`;
@@ -474,49 +620,6 @@ function bindControls() {
   };
   document.getElementById('btn-share-latest').addEventListener('click', () => copyShare(false));
   document.getElementById('btn-share-snap').addEventListener('click', () => copyShare(true));
-
-  // Config export / import (cross-device sync without login/Firestore!)
-  document.getElementById('btn-export-cfg').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({
-      version: 1,
-      selected: state.selected,
-      includeMarket: state.includeMarket,
-      mode: state.mode,
-    }, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'tw-stock-public-picks.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-
-  const fileInput = document.getElementById('import-file');
-  document.getElementById('btn-import-cfg').addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || file.size > 32768) {
-      alert('設定檔無效或檔案過大。');
-      return;
-    }
-    try {
-      const parsed = JSON.parse(await file.text());
-      const validSet = new Set(state.catalog.items.map((i) => i.ticker));
-      const clean = (parsed.selected || []).filter((t) => TICKER_RE.test(t) && validSet.has(t)).slice(0, MAX_SERIES - 1);
-      if (!clean.length) throw new Error('empty');
-      state.selected = clean;
-      state.includeMarket = Boolean(parsed.includeMarket);
-      state.mode = parsed.mode === 'price_only' ? 'price_only' : 'total_return';
-      document.getElementById('include-market').checked = state.includeMarket;
-      document.getElementById('calc-mode').value = state.mode;
-      saveLocalPicks();
-      renderPicker();
-      updateChart();
-    } catch {
-      alert('無法解析設定檔，請確認為本站匯出之 JSON 格式。');
-    } finally {
-      fileInput.value = '';
-    }
-  });
 
   document.getElementById('etf-cat-filter').addEventListener('change', renderEtfTable);
   document.getElementById('etf-sort').addEventListener('change', renderEtfTable);
@@ -576,7 +679,6 @@ async function init() {
     state.benchmark = shared.benchmark;
     if (shared.startDate) state.startDate = shared.startDate;
     if (shared.endDate) state.endDate = shared.endDate;
-    state.customTitle = shared.title;
   }
 
   document.getElementById('include-market').checked = state.includeMarket;

@@ -25,32 +25,40 @@
   <main class="container">
     <div id="snapshot-banner" class="notice hidden"></div>
 
-    <!-- Tab 1: Return Trend -->
+    <!-- Tab 1: Return Trend (Layout A: Compact Selected Chips + Search Dropdown + Collapsible Category Drawer) -->
     <section id="tab-trend">
       <div class="panel">
         <div class="panel-title">
           <span>比較標的（單次上限 9 檔含大盤）</span>
           <span id="selected-counter" class="muted"></span>
         </div>
+
+        <!-- Row 1: Neutral Preset Templates -->
         <div class="row" id="preset-bar"></div>
-        <div class="row" style="margin-top:8px">
-          <input id="ticker-search" class="input" type="search" placeholder="搜尋代號或名稱（如 0050、2330）" maxlength="30">
-          <select id="cat-filter" class="select">
-            <option value="all">全部類別</option>
-            <option value="tw_equity">台股股票型 ETF</option>
-            <option value="foreign_equity">國外成分股 ETF</option>
-            <option value="bond">債券型 ETF</option>
-            <option value="tw_stock">台股權值股</option>
-          </select>
+
+        <!-- Row 2: Active Selected Chips Bar -->
+        <div class="selected-bar" style="margin-top:10px">
+          <div id="selected-chips" class="chips-list"></div>
+        </div>
+
+        <!-- Row 3: Quick Search Dropdown + Collapsible Category Drawer Button -->
+        <div class="row" style="margin-top:10px;position:relative">
+          <div class="search-wrap">
+            <input id="ticker-search" class="input search-input" type="search" placeholder="🔍 輸入代號或名稱直接點選加入（如 0050、2330、美債）" maxlength="30" autocomplete="off">
+            <div id="search-dropdown" class="search-dropdown hidden"></div>
+          </div>
+          <button id="btn-toggle-drawer" class="btn" type="button" aria-expanded="false">▼ 展開分類瀏覽標的</button>
           <label class="row muted" style="gap:4px">
             <input id="include-market" type="checkbox" checked> 加入大盤（TAIEX）
           </label>
           <button id="btn-clear" class="btn" type="button">清除選取</button>
-          <button id="btn-export-cfg" class="btn" type="button">匯出組合</button>
-          <button id="btn-import-cfg" class="btn" type="button">匯入組合</button>
-          <input id="import-file" type="file" accept="application/json" class="hidden">
         </div>
-        <div id="ticker-grid" class="ticker-grid"></div>
+
+        <!-- Collapsible Category Drawer (collapsed by default so chart stays high on first screen) -->
+        <div id="category-drawer" class="category-drawer hidden">
+          <div id="drawer-cat-tabs" class="cat-tabs"></div>
+          <div id="ticker-grid" class="ticker-grid-compact"></div>
+        </div>
       </div>
 
       <div class="panel" style="margin-top:12px">

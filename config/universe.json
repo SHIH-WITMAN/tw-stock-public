@@ -1,10 +1,10 @@
 {
-  "version": "1.0.0",
-  "note": "Phase 1 公開試跑名單（30 檔代表 ETF＋10 檔權值個股）。刻意納入分割、現金減資、上櫃債券與國外成分標的以驗證罕見公司事件。僅含目前掛牌標的（存續偏誤須於畫面明示）。",
+  "version": "1.1.0",
+  "note": "Phase 1 候選標的池（42 檔常見熱門 ETF 與代表權值股）與 6 組分類觀察範本。enabled=true 者才會抓資料並顯示於前台。",
   "presets": [
     {
       "id": "market_vs_highdiv",
-      "label": "市值型 vs 高股息型",
+      "label": "市值型 vs 高股息代表",
       "tickers": [
         "0050",
         "006208",
@@ -16,34 +16,61 @@
       "include_market": true
     },
     {
-      "id": "tech_etf_and_leaders",
-      "label": "台股科技 ETF 與權值股",
+      "id": "highdiv_family",
+      "label": "季配／月配高股息比較",
+      "tickers": [
+        "0056",
+        "00878",
+        "00713",
+        "00919",
+        "00918",
+        "00915",
+        "00929"
+      ],
+      "include_market": true
+    },
+    {
+      "id": "tech_etf",
+      "label": "台股科技與半導體 ETF",
       "tickers": [
         "0050",
         "0052",
         "00881",
         "00891",
-        "2330",
-        "2317",
-        "2454"
+        "00935",
+        "00894"
       ],
       "include_market": true
     },
     {
-      "id": "us_equity_etf",
-      "label": "美股成分 ETF 觀察",
+      "id": "mega_stocks_vs_0050",
+      "label": "電子權值龍頭 vs 0050",
+      "tickers": [
+        "0050",
+        "2330",
+        "2317",
+        "2454",
+        "2308",
+        "2382"
+      ],
+      "include_market": true
+    },
+    {
+      "id": "us_global_etf",
+      "label": "美股與海外科技 ETF",
       "tickers": [
         "00646",
         "00662",
         "00757",
         "00830",
+        "00924",
         "0050"
       ],
       "include_market": false
     },
     {
       "id": "bond_etf",
-      "label": "美債與投資級債券 ETF",
+      "label": "長天期美債與投等債 ETF",
       "tickers": [
         "00679B",
         "00687B",
@@ -76,7 +103,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00850",
@@ -87,7 +114,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00922",
@@ -98,7 +125,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00923",
@@ -110,6 +137,17 @@
       "benchmark_eligible": true,
       "has_price_limit": true,
       "enabled": false
+    },
+    {
+      "ticker": "00692",
+      "name": "富邦公司治理",
+      "market": "TWSE",
+      "type": "ETF",
+      "category": "tw_equity",
+      "category_label": "台股股票型",
+      "benchmark_eligible": true,
+      "has_price_limit": true,
+      "enabled": true
     },
     {
       "ticker": "00905",
@@ -131,7 +169,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00881",
@@ -230,7 +268,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00929",
@@ -241,7 +279,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00915",
@@ -255,6 +293,17 @@
       "enabled": false
     },
     {
+      "ticker": "00940",
+      "name": "元大台灣價值高息",
+      "market": "TWSE",
+      "type": "ETF",
+      "category": "tw_equity",
+      "category_label": "台股股票型",
+      "benchmark_eligible": true,
+      "has_price_limit": true,
+      "enabled": true
+    },
+    {
       "ticker": "00646",
       "name": "元大S&P500",
       "market": "TWSE",
@@ -263,7 +312,7 @@
       "category_label": "國外成分股",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00662",
@@ -274,7 +323,7 @@
       "category_label": "國外成分股",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00757",
@@ -285,7 +334,7 @@
       "category_label": "國外成分股",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00830",
@@ -296,7 +345,7 @@
       "category_label": "國外成分股",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00645",
@@ -318,7 +367,7 @@
       "category_label": "國外成分股",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00679B",
@@ -340,7 +389,7 @@
       "category_label": "債券型",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00720B",
@@ -351,7 +400,7 @@
       "category_label": "債券型",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00772B",
@@ -362,7 +411,7 @@
       "category_label": "債券型",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00937B",
@@ -373,7 +422,7 @@
       "category_label": "債券型",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00933B",
@@ -384,7 +433,7 @@
       "category_label": "債券型",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "2330",
@@ -406,7 +455,7 @@
       "category_label": "台股權值股",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "2454",
@@ -417,7 +466,7 @@
       "category_label": "台股權值股",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "2308",
@@ -428,7 +477,18 @@
       "category_label": "台股權值股",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "ticker": "2382",
+      "name": "廣達",
+      "market": "TWSE",
+      "type": "STOCK",
+      "category": "tw_stock",
+      "category_label": "台股權值股",
+      "benchmark_eligible": true,
+      "has_price_limit": true,
+      "enabled": true
     },
     {
       "ticker": "2881",
@@ -439,7 +499,7 @@
       "category_label": "台股權值股",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "2882",
@@ -450,7 +510,18 @@
       "category_label": "台股權值股",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "ticker": "2891",
+      "name": "中信金",
+      "market": "TWSE",
+      "type": "STOCK",
+      "category": "tw_stock",
+      "category_label": "台股權值股",
+      "benchmark_eligible": true,
+      "has_price_limit": true,
+      "enabled": true
     },
     {
       "ticker": "2303",
@@ -461,7 +532,7 @@
       "category_label": "台股權值股",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "2412",
@@ -472,7 +543,7 @@
       "category_label": "台股權值股",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "2603",
