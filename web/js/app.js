@@ -49,8 +49,15 @@ function el(tag, attrs = {}, text = '') {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class') node.className = v;
-    else if (k === 'style') node.setAttribute('style', v);
-    else node.setAttribute(k, v);
+    else if (k === 'style') {
+      // Use CSSOM setProperty instead of setAttribute('style', ...) so strict CSP `style-src 'self'` allows it.
+      for (const decl of String(v).split(';')) {
+        const idx = decl.indexOf(':');
+        if (idx > 0) {
+          node.style.setProperty(decl.slice(0, idx).trim(), decl.slice(idx + 1).trim());
+        }
+      }
+    } else node.setAttribute(k, v);
   }
   if (text !== '') node.textContent = text;
   return node;
