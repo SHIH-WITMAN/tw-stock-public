@@ -12,9 +12,52 @@ from pipeline import engine
 
 SESSION = requests.Session()
 SESSION.headers.update({'User-Agent': 'tw-stock-public-phase1/1.0 (non-commercial research)'})
+_NET_REQ_COUNT = 0
+
+
+def _classify_security(code, name, market):
+    """Infer type and default category from official code/name."""
+    is_etf = code.startswith('00')
+    sec_type = 'ETF' if is_etf else 'STOCK'
+    if not is_etf:
+        return {
+            'type': 'STOCK',
+            'category': 'tw_stock',
+            'category_label': '台股權值股',
+            'benchmark_eligible': True,
+            'has_price_limit': True,
+        }
+    if code.endswith('B') or any(k in name for k in ('債', '公債', '公司債', '金融債')):
+        return {
+            'type': 'ETF',
+            'category': 'bond',
+            'category_label': '債券型',
+            'benchmark_eligible': False,
+            'has_price_limit': False,
+        }
+    if any(k in name.upper() for k in ('S&P', 'NASDAQ', 'FANG', '費城', '美國', '美股', '日本', '日經', '歐洲', '印度', '全球', '海外', '中國', '恒生', '滬深', '越南')):
+        return {
+            'type': 'ETF',
+            'category': 'foreign_equity',
+            'category_label': '國外成分股',
+            'benchmark_eligible': False,
+            'has_price_limit': False,
+        }
+    return {
+        'type': 'ETF',
+        'category': 'tw_equity',
+        'category_label': '台股股票型',
+        'benchmark_eligible': True,
+        'has_price_limit': True,
+    }
 
 
 def _get_json(url, params=None, *, method='GET', delay=0.8, retries=4):
+    global _NET_REQ_COUNT
+    _NET_REQ_COUNT += 1
+    if _NET_REQ_COUNT > 1 and (_NET_REQ_COUNT % 25 == 0):
+        print(f'  [節流保護] 已連續請求 {_NET_REQ_COUNT} 次，自動暫停 6 秒避免觸發證交所限流...', flush=True)
+        time.sleep(6.0)
     last_err = None
     for attempt in range(retries + 1):
         time.sleep(delay if attempt == 0 else 10.0 * attempt)
@@ -109,32 +152,118 @@ class OfficialStore:
                     quotes[d] = v
         return sorted(quotes.items())
 
-    def fetch_prices(self, ticker, market, start_d, end_d, *, today=None):
+    def has_cached_history(self, ticker, market):
+        prefix = 'tpex_px_' if market == 'TPEx' else 'twse_px_'
+        return any(self.raw_dir.glob(f'{prefix}{ticker}_*.json'))
+
+    def fetch_all_market_daily_and_dictionary(self, *, refresh=True):
+        """Fast 2-request all-market daily snapshot + 2,000+ security search dictionary."""
+        dict_path = self.raw_dir / 'market_dictionary.json'
+        snap_path = self.raw_dir / 'daily_all_snapshot.json'
+        if not refresh and dict_path.exists() and snap_path.exists():
+            return (
+                json.loads(snap_path.read_text(encoding='utf-8')),
+                json.loads(dict_path.read_text(encoding='utf-8')),
+            )
+
+        daily_prices = {}
+        dictionary = {}
+
+        # 1. TWSE OpenAPI STOCK_DAY_ALL (1 request for all listed stocks & ETFs)
+        try:
+            twse_rows = _get_json('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', delay=0.25)
+            if isinstance(twse_rows, list):
+                for row in twse_rows:
+                    code = str(row.get('Code') or '').strip().upper()
+                    name = str(row.get('Name') or '').strip()
+                    if not code or not name or len(code) < 4 or code.endswith(('R', 'L')):
+                        continue
+                    d = engine.parse_date(row.get('Date'))
+                    c = engine.safe_float(row.get('ClosingPrice'))
+                    if d and c and c > 0:
+                        daily_prices[code] = {'date': d.isoformat(), 'close': c, 'market': 'TWSE'}
+                    info = _classify_security(code, name, 'TWSE')
+                    dictionary[code] = {'ticker': code, 'name': name, 'market': 'TWSE', **info}
+        except Exception as err:
+            print(f'  [提示] TWSE 全市場當日快照略過: {err}', flush=True)
+
+        # 2. TPEx OpenAPI daily close quotes (1 request for all OTC stocks & bond ETFs)
+        try:
+            tpex_rows = _get_json('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes', delay=0.25)
+            if isinstance(tpex_rows, list):
+                for row in tpex_rows:
+                    code = str(row.get('SecuritiesCompanyCode') or '').strip().upper()
+                    name = str(row.get('CompanyName') or '').strip()
+                    if not code or not name or len(code) < 4 or len(code) > 6 or code.endswith(('R', 'L')):
+                        continue
+                    d = engine.parse_date(row.get('Date'))
+                    c = engine.safe_float(row.get('Close'))
+                    if d and c and c > 0:
+                        daily_prices[code] = {'date': d.isoformat(), 'close': c, 'market': 'TPEx'}
+                    info = _classify_security(code, name, 'TPEx')
+                    dictionary[code] = {'ticker': code, 'name': name, 'market': 'TPEx', **info}
+        except Exception as err:
+            print(f'  [提示] TPEx 全市場當日快照略過: {err}', flush=True)
+
+        dict_list = sorted(dictionary.values(), key=lambda x: x['ticker'])
+        if dict_list:
+            dict_path.write_text(json.dumps(dict_list, ensure_ascii=False, indent=2), encoding='utf-8')
+        if daily_prices:
+            snap_path.write_text(json.dumps(daily_prices, ensure_ascii=False), encoding='utf-8')
+        return daily_prices, dict_list
+
+    def fetch_prices(self, ticker, market, start_d, end_d, *, today=None, daily_patch=None, expected_end=None):
         today = today or date.today()
         quotes = {}
         empty_streak = 0
+        patch_item = (daily_patch or {}).get(ticker)
+        patch_d = engine.parse_date(patch_item['date']) if patch_item else None
+        patch_c = engine.safe_float(patch_item['close']) if patch_item else None
+
         # Walk backwards from latest month to earliest so pre-IPO empty months stop early.
         for y, m in reversed(month_range(start_d, end_d)):
             is_cur = (y, m) >= (today.year, today.month)
+            cache_key = f'tpex_px_{ticker}_{y}{m:02d}' if market == 'TPEx' else f'twse_px_{ticker}_{y}{m:02d}'
+            cache_file = self._cache_path(cache_key)
+
+            # Fast-track: only skip per-ticker monthly refresh when BOTH:
+            # (1) current month is cached, AND
+            # (2) either cache already reaches expected_end, OR daily_patch reaches expected_end
+            #     within 4 days of the cached latest session (prevents skipping when OpenAPI lags TAIEX!).
+            need_refresh = is_cur
+            if is_cur and cache_file.exists():
+                try:
+                    cached_j = json.loads(cache_file.read_text(encoding='utf-8'))
+                    c_rows = (cached_j.get('tables') or [{}])[0].get('data', []) if market == 'TPEx' else (cached_j.get('data', []) if cached_j.get('stat') == 'OK' else [])
+                    c_dates = [engine.parse_date(r[0]) for r in c_rows if engine.parse_date(r[0])]
+                    if c_dates:
+                        max_cached = max(c_dates)
+                        if expected_end and max_cached >= expected_end:
+                            need_refresh = False
+                        elif patch_d and patch_c and (not expected_end or patch_d >= expected_end) and (patch_d - max_cached).days <= 4:
+                            need_refresh = False
+                except Exception:
+                    need_refresh = True
+
             if market == 'TPEx':
                 j = self._cached(
-                    f'tpex_px_{ticker}_{y}{m:02d}',
+                    cache_key,
                     lambda y=y, m=m: _get_json(
                         'https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock',
                         {'date': f'{y}/{m:02d}/01', 'code': ticker, 'response': 'json'},
                     ),
-                    refresh=is_cur,
+                    refresh=need_refresh,
                 )
                 tables = j.get('tables') or []
                 rows = tables[0].get('data', []) if tables else []
             else:
                 j = self._cached(
-                    f'twse_px_{ticker}_{y}{m:02d}',
+                    cache_key,
                     lambda y=y, m=m: _get_json(
                         'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY',
                         {'date': f'{y}{m:02d}01', 'stockNo': ticker, 'response': 'json'},
                     ),
-                    refresh=is_cur,
+                    refresh=need_refresh,
                 )
                 rows = j.get('data', []) if j.get('stat') == 'OK' else []
             month_hits = 0
@@ -150,6 +279,9 @@ class OfficialStore:
                     break
             else:
                 empty_streak = 0
+
+        if patch_d and patch_c and patch_c > 0 and start_d <= patch_d <= end_d:
+            quotes[patch_d] = patch_c
         return sorted(quotes.items())
 
     def fetch_twse_etf_splits(self, start_d, end_d, *, today=None):
@@ -301,7 +433,7 @@ class OfficialStore:
                 if kind == '息' and val and val > 0:
                     events_by_ticker.setdefault(code, []).append({'kind': 'cash', 'date': d, 'cash': val})
                 elif '權' in kind:
-                    # Fetch exact detail when stock rights are involved.
+                    # Fetch exact detail when stock rights or cash capital-increase subscription are involved.
                     det = self._cached(
                         f'twse_twt49udet_{code}_{d.strftime("%Y%m%d")}',
                         lambda code=code, d=d: _get_json(
@@ -314,10 +446,18 @@ class OfficialStore:
                         c_div = engine.safe_float(drows[0][2]) or 0.0
                         # Columns 4 & 5: earnings / surplus free shares per 1000 shares
                         s_free = (engine.safe_float(drows[0][4]) or 0.0) + (engine.safe_float(drows[0][5]) or 0.0)
+                        # Column 6: cash capital increase (有償現金增資) new shares
+                        c_sub = (engine.safe_float(drows[0][6]) or 0.0) if len(drows[0]) > 6 else 0.0
                         if c_div > 0:
                             events_by_ticker.setdefault(code, []).append({'kind': 'cash', 'date': d, 'cash': c_div})
                         if s_free > 0:
                             events_by_ticker.setdefault(code, []).append({'kind': 'stock', 'date': d, 'ratio': 1.0 + s_free / 1000.0})
+                        if c_sub > 0 and before and after and before > 0 and after > 0:
+                            # Residual ex-rights factor after accounting for cash dividend and free stock dividend
+                            theo_after_free = (before - c_div) / (1.0 + s_free / 1000.0)
+                            rights_ratio = theo_after_free / after
+                            if rights_ratio > 1.0005:
+                                events_by_ticker.setdefault(code, []).append({'kind': 'rights_issue', 'date': d, 'ratio': rights_ratio})
         return events_by_ticker, refs_by_ticker
 
     def fetch_tpex_exright(self, start_d, end_d, *, today=None):

@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>台股含息趨勢｜本機專用管理後台（僅本機可見）</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-alt: #334155;
+      --border: #475569;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "PingFang TC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    header h1 { margin: 0; font-size: 1.1rem; }
+    .tag {
+      font-size: 0.75rem;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.16);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .wrap {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 0.98rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    input, select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    button, .link-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+      padding: 7px 13px;
+      border-radius: 8px;
+      font-size: 0.84rem;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover, .link-btn:hover { opacity: 0.9; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #0f172a; font-weight: 700; }
+    button.green { background: var(--green); border-color: var(--green); color: #0f172a; font-weight: 700; }
+    button.danger { background: transparent; border-color: var(--red); color: var(--red); }
+    .muted { color: var(--muted); font-size: 0.82rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: var(--muted); background: rgba(15, 23, 42, 0.45); }
+    .status-dot { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
+    .dot-green { background: rgba(52, 211, 153, 0.16); color: var(--green); }
+    .dot-amber { background: rgba(251, 191, 36, 0.16); color: var(--amber); }
+    .dot-gray { background: rgba(148, 163, 184, 0.15); color: var(--muted); }
+    .log-box {
+      background: #020617;
+      color: #e2e8f0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      max-height: 240px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      margin-top: 10px;
+    }
+    .search-results {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
+      gap: 8px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .sr-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .preset-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <h1>🛠️ 台股含息趨勢｜本機專用管理後台</h1>
+      <span class="tag">僅本機 127.0.0.1 可見 · 外網訪客完全無法存取</span>
+    </div>
+    <div class="row">
+      <a class="link-btn" href="/preview/" target="_blank" rel="noopener">👁️ 開啟本機前台預覽</a>
+      <a class="link-btn" href="https://tw-stock-public.pages.dev" target="_blank" rel="noopener">🌐 開啟線上正式網頁</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Section 1: Action Center (Fetch Official Data & Push to GitHub) -->
+    <section class="card">
+      <h2>
+        <span>① 資料更新與發布中心（雙軌智慧抓取：已快取標的約 5～10 秒、新啟用標的自動節流回填）</span>
+        <span id="latest-badge" class="muted"></span>
+      </h2>
+      <div class="row">
+        <select id="build-years" title="選擇歷史資料抓取年數（首次切 5 年會補抓 2021～2022 約 10～15 分鐘，之後皆快取免重抓）">
+          <option value="3" selected>歷史區間：近 3 年（預設・快速）</option>
+          <option value="5">歷史區間：近 5 年（首次補抓 2021～2022 約 10～15 分鐘）</option>
+        </select>
+        <button id="btn-run-build" class="primary" type="button">⚡ 1. 抓取已啟用標的官方資料並更新本機預覽</button>
+        <input id="push-msg" type="text" placeholder="選填：Git 更新說明" style="min-width:240px">
+        <button id="btn-run-push" class="green" type="button">🚀 2. 推送至 GitHub（Cloudflare 自動上線）</button>
+        <span id="job-status" class="muted"></span>
+      </div>
+      <div id="job-logs" class="log-box">尚無執行紀錄。修改標的或啟用開關後，請先點「1. 抓取已啟用標的官方資料」，確認預覽無誤再點「2. 推送至 GitHub」。</div>
+    </section>
+
+    <!-- Section 2: Full-Market 2,000+ Ticker Search & Add -->
+    <section class="card">
+      <h2>
+        <span>② 全市場股票／ETF 搜尋加入（支援代號或中文名稱模糊搜尋）</span>
+        <span class="row">
+          <span id="dict-count" class="muted"></span>
+          <button id="btn-sync-dict" type="button">🔄 同步 TWSE／TPEx 全市場官方字典</button>
+        </span>
+      </h2>
+      <div class="row">
+        <input id="dict-search" type="search" placeholder="輸入代號或中文名稱搜尋（例如：2308、台達電、美債、00918、鴻海）" style="flex:1;min-width:260px">
+        <select id="add-default-cat">
+          <option value="auto">自動依名稱判斷分類</option>
+          <option value="tw_equity">台股股票型 ETF</option>
+          <option value="foreign_equity">國外成分股 ETF</option>
+          <option value="bond">債券型 ETF</option>
+          <option value="tw_stock">台股權值股</option>
+        </select>
+      </div>
+      <div id="search-results" class="search-results"></div>
+
+      <details style="margin-top:12px">
+        <summary class="muted" style="cursor:pointer">➕ 手動輸入代號新增（若字典尚未收錄之新掛牌標的）</summary>
+        <div class="row" style="margin-top:8px">
+          <input id="man-code" type="text" placeholder="代號（如 009816）" style="width:130px">
+          <input id="man-name" type="text" placeholder="名稱（如 凱基台灣TOP50）" style="width:180px">
+          <select id="man-market">
+            <option value="TWSE">上市 TWSE</option>
+            <option value="TPEx">上櫃 TPEx</option>
+          </select>
+          <select id="man-cat">
+            <option value="tw_equity">台股股票型 ETF</option>
+            <option value="foreign_equity">國外成分股 ETF</option>
+            <option value="bond">債券型 ETF</option>
+            <option value="tw_stock">台股權值股</option>
+          </select>
+          <button id="btn-man-add" class="primary" type="button">＋手動加入並啟用</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- Section 3: Candidate Pool & Active Toggle Table -->
+    <section class="card">
+      <h2>
+        <span id="pool-title">③ 候選與已收錄標的池管理</span>
+        <span class="row">
+          <select id="pool-cat-filter">
+            <option value="all">全部類別</option>
+            <option value="tw_equity">台股股票型 ETF</option>
+            <option value="foreign_equity">國外成分股 ETF</option>
+            <option value="bond">債券型 ETF</option>
+            <option value="tw_stock">台股權值股</option>
+          </select>
+          <select id="pool-status-filter">
+            <option value="all">全部狀態</option>
+            <option value="enabled">僅顯示已啟用（前台顯示）</option>
+            <option value="disabled">僅顯示未啟用（候選隱藏）</option>
+          </select>
+          <input id="pool-filter-q" type="search" placeholder="篩選池內代號或名稱">
+        </span>
+      </h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>前台顯示開關</th>
+              <th>代號</th>
+              <th>名稱</th>
+              <th>市場</th>
+              <th>分類</th>
+              <th>本機快取狀態</th>
+              <th>目前前台發布</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="pool-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 4: Preset Templates Management -->
+    <section class="card">
+      <h2>
+        <span>④ 前台「觀察範本（Presets）」快捷按鈕管理（僅至少 2 檔已發布之範本會自動顯示於前台）</span>
+      </h2>
+      <div id="presets-list"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="new-preset-label" type="text" placeholder="新範本名稱（如：金控存股代表）" style="width:210px">
+        <input id="new-preset-tickers" type="text" placeholder="包含代號，逗號分隔（如：2881,2882,2891,0050）" style="flex:1;min-width:240px">
+        <label class="muted"><input id="new-preset-mkt" type="checkbox" checked> 預設含大盤</label>
+        <button id="btn-add-preset" class="primary" type="button">＋新增觀察範本</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let appState = { universe: { tickers: [], presets: [] }, dictionary_count: 0, latest: null };
+    let pollTimer = null;
+
+    function el(tag, attrs = {}, text = '') {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') n.className = v;
+        else if (k === 'style') n.setAttribute('style', v);
+        else n.setAttribute(k, v);
+      }
+      if (text !== '') n.textContent = text;
+      return n;
+    }
+
+    async function api(url, body = null) {
+      const opts = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+      const r = await fetch(url, opts);
+      return r.json();
+    }
+
+    async function refreshState() {
+      appState = await api('/api/state');
+      const tickers = appState.universe.tickers || [];
+      const enCount = tickers.filter((t) => t.enabled).length;
+      const pubCount = tickers.filter((t) => t.published).length;
+      document.getElementById('pool-title').textContent = `③ 候選與已收錄標的池（共 ${tickers.length} 檔 · 已勾選啟用 ${enCount} 檔 · 已發布至前台 ${pubCount} 檔）`;
+      document.getElementById('dict-count').textContent = appState.dictionary_count
+        ? `已載入全市場 ${appState.dictionary_count} 檔官方代號`
+        : '尚未同步全市場字典（點右側按鈕 2 秒即可同步）';
+      document.getElementById('latest-badge').textContent = appState.latest
+        ? `目前前台版本：${appState.latest.version}（截至 ${appState.latest.data_date}）`
+        : '尚無前台版本';
+      renderPoolTable();
+      renderPresets();
+      await pollJob();
+    }
+
+    function renderPoolTable() {
+      const tbody = document.getElementById('pool-tbody');
+      tbody.textContent = '';
+      const catF = document.getElementById('pool-cat-filter').value;
+      const stF = document.getElementById('pool-status-filter').value;
+      const q = document.getElementById('pool-filter-q').value.trim().toUpperCase();
+
+      const rows = (appState.universe.tickers || []).filter((t) => {
+        if (catF !== 'all' && t.category !== catF) return false;
+        if (stF === 'enabled' && !t.enabled) return false;
+        if (stF === 'disabled' && t.enabled) return false;
+        if (q && !t.ticker.includes(q) && !t.name.toUpperCase().includes(q)) return false;
+        return true;
+      });
+
+      for (const item of rows) {
+        const tr = document.createElement('tr');
+
+        // Toggle switch
+        const tdToggle = document.createElement('td');
+        const toggleBtn = el('button', {
+          type: 'button',
+          class: item.enabled ? 'green' : '',
+          style: 'padding:4px 10px;font-size:0.78rem',
+        }, item.enabled ? '✅ 已啟用（前台顯示）' : '⏸️ 未啟用（隱藏）');
+        toggleBtn.addEventListener('click', async () => {
+          await api('/api/update-ticker', { ticker: item.ticker, enabled: !item.enabled });
+          await refreshState();
+        });
+        tdToggle.appendChild(toggleBtn);
+        tr.appendChild(tdToggle);
+
+        tr.appendChild(el('td', { style: 'font-family:ui-monospace,monospace;font-weight:700' }, item.ticker));
+        tr.appendChild(el('td', {}, item.name));
+        tr.appendChild(el('td', { class: 'muted' }, item.market));
+
+        // Category select
+        const tdCat = document.createElement('td');
+        const sel = document.createElement('select');
+        for (const [val, lbl] of [
+          ['tw_equity', '台股股票型 ETF'],
+          ['foreign_equity', '國外成分股 ETF'],
+          ['bond', '債券型 ETF'],
+          ['tw_stock', '台股權值股'],
+        ]) {
+          const opt = el('option', { value: val }, lbl);
+          if (item.category === val) opt.selected = true;
+          sel.appendChild(opt);
+        }
+        sel.addEventListener('change', async () => {
+          await api('/api/update-ticker', { ticker: item.ticker, category: sel.value });
+          await refreshState();
+        });
+        tdCat.appendChild(sel);
+        tr.appendChild(tdCat);
+
+        // Cache status
+        const tdCache = document.createElement('td');
+        tdCache.appendChild(el('span', {
+          class: `status-dot ${item.cached ? 'dot-green' : 'dot-amber'}`,
+        }, item.cached ? '🟢 已快取歷史' : '🟡 待首次抓取'));
+        tr.appendChild(tdCache);
+
+        // Published status
+        const tdPub = document.createElement('td');
+        tdPub.appendChild(el('span', {
+          class: `status-dot ${item.published ? 'dot-green' : 'dot-gray'}`,
+        }, item.published ? '已上線顯示' : '未發布'));
+        tr.appendChild(tdPub);
+
+        // Delete button
+        const tdAct = document.createElement('td');
+        const delBtn = el('button', { type: 'button', class: 'danger', style: 'padding:3px 8px;font-size:0.76rem' }, '移除');
+        delBtn.addEventListener('click', async () => {
+          if (!confirm(`確定從候選池移除 ${item.ticker} ${item.name}？（已快取的原始檔仍會保留）`)) return;
+          await api('/api/update-ticker', { ticker: item.ticker, delete: true });
+          await refreshState();
+        });
+        tdAct.appendChild(delBtn);
+        tr.appendChild(tdAct);
+
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderPresets() {
+      const box = document.getElementById('presets-list');
+      box.textContent = '';
+      const pubSet = new Set((appState.universe.tickers || []).filter((t) => t.published).map((t) => t.ticker));
+      const presets = appState.universe.presets || [];
+
+      presets.forEach((p, idx) => {
+        const activeCount = (p.tickers || []).filter((t) => pubSet.has(t)).length;
+        const row = el('div', { class: 'preset-item' });
+        const left = el('div', {});
+        left.appendChild(el('strong', { style: 'margin-right:8px' }, p.label));
+        left.appendChild(el('span', { class: 'muted', style: 'font-family:ui-monospace,monospace' }, `[${(p.tickers || []).join(', ')}] ${p.include_market ? '＋大盤' : '（不含大盤）'}`));
+        left.appendChild(el('span', {
+          class: `status-dot ${activeCount >= 2 ? 'dot-green' : 'dot-gray'}`,
+          style: 'margin-left:8px',
+        }, activeCount >= 2 ? `前台顯示中（${activeCount} 檔可用）` : `前台自動隱藏（僅 ${activeCount} 檔已發布）`));
+
+        const delBtn = el('button', { type: 'button', class: 'danger', style: 'padding:3px 8px;font-size:0.76rem' }, '刪除範本');
+        delBtn.addEventListener('click', async () => {
+          const next = presets.filter((_, i) => i !== idx);
+          await api('/api/save-presets', { presets: next });
+          await refreshState();
+        });
+        row.append(left, delBtn);
+        box.appendChild(row);
+      });
+    }
+
+    async function doSearch() {
+      const q = document.getElementById('dict-search').value.trim();
+      const box = document.getElementById('search-results');
+      if (!q) {
+        box.textContent = '';
+        return;
+      }
+      const res = await api(`/api/search?q=${encodeURIComponent(q)}`);
+      box.textContent = '';
+      if (!res.results || res.results.length === 0) {
+        box.appendChild(el('div', { class: 'muted' }, appState.dictionary_count === 0
+          ? '請先點右上角「🔄 同步 TWSE／TPEx 全市場官方字典」即可搜尋全市場 2,000+ 檔標的。'
+          : '找不到符合之代號或名稱。'));
+        return;
+      }
+      for (const item of res.results) {
+        const card = el('div', { class: 'sr-card' });
+        const info = el('div', {});
+        info.appendChild(el('strong', { style: 'font-family:ui-monospace,monospace;margin-right:6px' }, item.ticker));
+        info.appendChild(el('span', {}, item.name));
+        info.appendChild(el('div', { class: 'muted', style: 'font-size:0.74rem' }, `${item.market} · ${item.category_label}`));
+
+        const btn = el('button', {
+          type: 'button',
+          class: item.in_universe ? '' : 'primary',
+          style: 'padding:4px 10px;font-size:0.78rem',
+        }, item.in_universe ? '已在池內（點此啟用）' : '＋加入並啟用');
+        btn.addEventListener('click', async () => {
+          const catOverride = document.getElementById('add-default-cat').value;
+          await api('/api/add-ticker', {
+            ticker: item.ticker,
+            name: item.name,
+            market: item.market,
+            category: catOverride === 'auto' ? item.category : catOverride,
+            enabled: true,
+          });
+          await refreshState();
+          await doSearch();
+        });
+        card.append(info, btn);
+        box.appendChild(card);
+      }
+    }
+
+    async function pollJob() {
+      const j = await api('/api/job');
+      const logBox = document.getElementById('job-logs');
+      if (j.logs && j.logs.length) {
+        logBox.textContent = j.logs.join('\n');
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+      const st = document.getElementById('job-status');
+      const buildBtn = document.getElementById('btn-run-build');
+      if (j.running) {
+        st.textContent = `⏳ 執行中：${j.kind}...`;
+        buildBtn.textContent = '⏳ 背景抓取執行中（請看下方即時紀錄）...';
+        if (!pollTimer) {
+          pollTimer = setInterval(pollJob, 1000);
+        }
+      } else {
+        buildBtn.textContent = '⚡ 1. 抓取已啟用標的官方資料並更新本機預覽';
+        st.textContent = j.status === 'done' ? '✅ 上次任務成功' : j.status === 'error' ? '❌ 上次任務失敗' : '';
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          await refreshState();
+        }
+      }
+    }
+
+    function startPolling() {
+      if (!pollTimer) pollTimer = setInterval(pollJob, 1000);
+      pollJob();
+    }
+
+    document.getElementById('btn-sync-dict').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-sync-dict');
+      btn.textContent = '同步中...';
+      await api('/api/sync-dict', {});
+      btn.textContent = '🔄 同步 TWSE／TPEx 全市場官方字典';
+      await refreshState();
+      await doSearch();
+    });
+
+    document.getElementById('dict-search').addEventListener('input', doSearch);
+    document.getElementById('pool-cat-filter').addEventListener('change', renderPoolTable);
+    document.getElementById('pool-status-filter').addEventListener('change', renderPoolTable);
+    document.getElementById('pool-filter-q').addEventListener('input', renderPoolTable);
+
+    document.getElementById('btn-man-add').addEventListener('click', async () => {
+      const ticker = document.getElementById('man-code').value.trim().toUpperCase();
+      const name = document.getElementById('man-name').value.trim();
+      const market = document.getElementById('man-market').value;
+      const category = document.getElementById('man-cat').value;
+      const res = await api('/api/add-ticker', { ticker, name, market, category, enabled: true });
+      if (res.error) {
+        alert(res.error);
+        return;
+      }
+      document.getElementById('man-code').value = '';
+      document.getElementById('man-name').value = '';
+      await refreshState();
+    });
+
+    document.getElementById('btn-add-preset').addEventListener('click', async () => {
+      const label = document.getElementById('new-preset-label').value.trim();
+      const tickers = document.getElementById('new-preset-tickers').value.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+      const include_market = document.getElementById('new-preset-mkt').checked;
+      if (!label || tickers.length < 2) {
+        alert('請填寫範本名稱，並至少輸入 2 個股票代號（以逗號分隔）。');
+        return;
+      }
+      const next = [...(appState.universe.presets || []), { id: `custom_${Date.now()}`, label, tickers, include_market }];
+      await api('/api/save-presets', { presets: next });
+      document.getElementById('new-preset-label').value = '';
+      document.getElementById('new-preset-tickers').value = '';
+      await refreshState();
+    });
+
+    document.getElementById('btn-run-build').addEventListener('click', async () => {
+      const years = Number(document.getElementById('build-years').value) || 3;
+      const res = await api('/api/build', { years });
+      startPolling();
+      if (res.error) alert(res.error);
+    });
+
+    document.getElementById('btn-run-push').addEventListener('click', async () => {
+      const msg = document.getElementById('push-msg').value.trim();
+      const res = await api('/api/push', { message: msg });
+      startPolling();
+      if (res.error) alert(res.error);
+    });
+
+    refreshState();
+  </script>
+</body>
+</html>

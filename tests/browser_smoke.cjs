@@ -1,5 +1,5 @@
 /**
- * Headless Playwright smoke test for Phase 1 static frontend (`web/`).
+ * Headless Playwright smoke test for Phase 1 static frontend (`web/` Layout A).
  */
 const http = require('node:http');
 const fs = require('node:fs');
@@ -53,18 +53,36 @@ function startServer() {
     const cardCount = await page.locator('.stat-card').count();
     assert.equal(cardCount, 5, 'default 4 tickers + TAIEX = 5 cards');
 
+    // Verify removed buttons are truly absent
+    assert.equal(await page.locator('#btn-png').count(), 0, 'PNG button removed');
+    assert.equal(await page.locator('#chart-title-input').count(), 0, 'Custom title input removed');
+    assert.equal(await page.locator('#btn-export-cfg').count(), 0, 'Export config button removed');
+    assert.equal(await page.locator('#btn-import-cfg').count(), 0, 'Import config button removed');
+
+    // Verify Layout A: selected chips visible, category drawer collapsed by default
+    const pillCount = await page.locator('#selected-chips .sel-pill').count();
+    assert.equal(pillCount, 5, 'TAIEX + 4 selected pills shown');
+    const drawerHiddenInitially = await page.locator('#category-drawer').evaluate((n) => n.classList.contains('hidden'));
+    assert.equal(drawerHiddenInitially, true, 'Category drawer collapsed by default');
+
+    // Expand drawer and toggle a ticker
+    await page.locator('#btn-toggle-drawer').click();
+    const drawerHiddenAfter = await page.locator('#category-drawer').evaluate((n) => n.classList.contains('hidden'));
+    assert.equal(drawerHiddenAfter, false, 'Category drawer expands on click');
+
+    // Search dropdown instant add/remove
+    await page.locator('#ticker-search').fill('2603');
+    await page.waitForSelector('#search-dropdown .search-item');
+    await page.locator('#search-dropdown .search-item').first().click();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.stat-card').count(), 6, '2603 added via search dropdown');
+
     // Focus click on second card -> auto-includes benchmark + dims rest
     await page.locator('.stat-card').nth(1).click();
     const focusedCount = await page.locator('.stat-card.focused').count();
     assert.equal(focusedCount, 2, 'first click on non-benchmark focuses itself + benchmark');
     await page.locator('#btn-reset-focus').click();
     assert.equal(await page.locator('.stat-card.focused').count(), 0);
-
-    // Preset click (bond ETFs)
-    await page.locator('#preset-bar button', { hasText: '美債與投資級債券 ETF' }).click();
-    await page.waitForTimeout(150);
-    const bondCards = await page.locator('.stat-card').count();
-    assert.ok(bondCards >= 4, 'bond preset renders cards');
 
     // Tab 2: ETF calendar table (bond ETF shows 不適用台股基準)
     await page.locator('[data-tab="etf"]').click();
@@ -90,7 +108,7 @@ function startServer() {
     assert.ok(overflow <= 1, `mobile 360px should not overflow horizontally (got ${overflow}px)`);
 
     assert.deepEqual(errors, [], `Unexpected browser errors: ${errors.join('; ')}`);
-    console.log(JSON.stringify({ result: 'PASS', cardCount, bondCards, overflow, theme: 'dark' }));
+    console.log(JSON.stringify({ result: 'PASS', cardCount, pillCount, overflow, theme: 'dark' }));
   } finally {
     await browser.close();
     server.close();

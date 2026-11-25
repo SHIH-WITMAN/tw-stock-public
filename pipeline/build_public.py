@@ -167,15 +167,22 @@ def _live_dataset(universe, selected_tickers, years=5):
     tpex_ex, tpex_ex_refs = store.fetch_tpex_exright(start_d, end_d, today=today)
     overrides = _load_overrides()
 
+    print('[live] Fetching fast all-market daily snapshot & security dictionary (2 requests)...', flush=True)
+    daily_patch, _ = store.fetch_all_market_daily_and_dictionary(refresh=True)
+
+    taiex_as_of = min(taiex_tr[-1][0], taiex_pr[-1][0])
     quotes_map = {}
     events_map = {}
     refs_map = {}
-    for meta in universe['tickers']:
+    target_list = [m for m in universe['tickers'] if m['ticker'] in target_codes]
+    for idx, meta in enumerate(target_list, 1):
         code = meta['ticker']
-        if code not in target_codes:
-            continue
-        print(f'[live] Fetching prices for {code} {meta["name"]} ({meta["market"]})...', flush=True)
-        quotes_map[code] = store.fetch_prices(code, meta['market'], start_d, end_d, today=today)
+        cached_tag = '已快取增量' if store.has_cached_history(code, meta['market']) else '首次回填歷史'
+        print(f'[live] [{idx}/{len(target_list)}] Fetching prices for {code} {meta["name"]} ({meta["market"]} · {cached_tag})...', flush=True)
+        quotes_map[code] = store.fetch_prices(
+            code, meta['market'], start_d, end_d,
+            today=today, daily_patch=daily_patch, expected_end=taiex_as_of,
+        )
         evs = []
         refs = []
         if meta['market'] == 'TPEx':
@@ -196,7 +203,27 @@ def _live_dataset(universe, selected_tickers, years=5):
         events_map[code] = evs
         refs_map[code] = refs
 
-    as_of = min(taiex_tr[-1][0], taiex_pr[-1][0])
+    # Align published as_of to the latest trading day where BOTH TAIEX and >= 50% of enabled tickers
+    # have closing quotes, preventing half-updated dates where TAIEX updates earlier than stocks.
+    as_of = taiex_as_of
+    non_empty = [q for q in quotes_map.values() if q]
+    if non_empty:
+        cal_dates = sorted(set(d for d, _ in taiex_tr) & set(d for d, _ in taiex_pr))
+        ticker_date_sets = [set(d for d, _ in q) for q in non_empty]
+        threshold = max(1, (len(ticker_date_sets) + 1) // 2)
+        for d in reversed(cal_dates):
+            if d > taiex_as_of:
+                continue
+            hits = sum(1 for ds in ticker_date_sets if d in ds)
+            if hits >= threshold:
+                as_of = d
+                break
+        if as_of < taiex_as_of:
+            print(f'[live] 大盤已更新至 {taiex_as_of}，但多數個股尚停在 {as_of}，發布截止日自動對齊至 {as_of}', flush=True)
+            taiex_tr = [(d, v) for d, v in taiex_tr if d <= as_of]
+            taiex_pr = [(d, v) for d, v in taiex_pr if d <= as_of]
+            quotes_map = {k: [(d, v) for d, v in q if d <= as_of] for k, q in quotes_map.items()}
+
     return {
         'as_of': as_of,
         'taiex_tr': taiex_tr,
@@ -270,7 +297,7 @@ def build_artifacts(dataset, universe, output_root):
         cal_rets = engine.compute_calendar_returns(
             calc['tri'], calc['breaks'], calendar, years,
             benchmark_tri=taiex_tri,
-            benchmark_eligible=bool(meta.get('benchmark_eligible', False)),
+            benchmark_eligible=True,
             as_of=as_of,
         )
         rolling = engine.compute_rolling_returns(calc['tri'], calc['breaks'], calendar, as_of=as_of)
@@ -278,6 +305,7 @@ def build_artifacts(dataset, universe, output_root):
         completed_comparable = [r for r in cal_rets if not r['is_ytd'] and r['beat_benchmark'] is not None]
         wins = sum(1 for r in completed_comparable if r['beat_benchmark'])
         comparable_years = len(completed_comparable)
+        last_close = round(float(quotes[-1][1]), 2) if quotes else None
 
         # Write per-ticker derived index JSON (ONLY derived indices tri/pri, NO raw closing prices!)
         (series_dir / f'{code}.json').write_text(
@@ -308,16 +336,17 @@ def build_artifacts(dataset, universe, output_root):
             'type': meta['type'],
             'category': meta['category'],
             'category_label': meta['category_label'],
-            'benchmark_eligible': bool(meta.get('benchmark_eligible', False)),
+            'benchmark_eligible': True,
             'first_date': calc['first_date'],
             'last_date': calc['last_date'],
+            'last_close': last_close,
             'div_count': calc['div_count'],
             'halt_days': calc['halt_days'],
             'has_breaks': bool(calc['breaks']),
             'rolling': rolling,
             'calendar_returns': cal_rets,
-            'beat_wins': wins if meta.get('benchmark_eligible') else None,
-            'comparable_years': comparable_years if meta.get('benchmark_eligible') else None,
+            'beat_wins': wins,
+            'comparable_years': comparable_years,
         })
 
     # Neutral default order: ticker ascending (投顧法中性原則)
@@ -357,9 +386,27 @@ def build_artifacts(dataset, universe, output_root):
             'include_market': True,
         })
 
+    taiex_cal_rets = engine.compute_calendar_returns(
+        taiex_tri, [], calendar, years,
+        benchmark_tri=None,
+        benchmark_eligible=False,
+        as_of=as_of,
+    )
+    taiex_rolling = engine.compute_rolling_returns(taiex_tri, [], calendar, as_of=as_of)
+    benchmark_summary = {
+        'ticker': 'TAIEX',
+        'name': '加權報酬指數（台股大盤）',
+        'category_label': '比較基準',
+        'last_date': as_of.isoformat(),
+        'last_close': round(float(taiex_pr_map[as_of]), 2),
+        'rolling': taiex_rolling,
+        'calendar_returns': taiex_cal_rets,
+    }
+
     catalog = {
         'as_of': as_of.isoformat(),
         'years': sorted(years, reverse=True),
+        'benchmark': benchmark_summary,
         'presets': active_presets,
         'category_medians': category_medians,
         'items': catalog_items,

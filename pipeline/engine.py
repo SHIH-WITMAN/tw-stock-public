@@ -200,7 +200,7 @@ def build_derived_series(quotes, events, calendar, *, reference_checks=None, has
                     f'{before} -> {after}）但事件表無對應紀錄'
                 )
 
-    order = {'capital_reduction_unsupported': 0, 'split': 0, 'capital_reduction': 0, 'cash': 1, 'stock': 2}
+    order = {'capital_reduction_unsupported': 0, 'split': 0, 'capital_reduction': 0, 'cash': 1, 'stock': 2, 'rights_issue': 2}
     tri = [None] * n
     pri = [None] * n
     breaks = []
@@ -255,6 +255,8 @@ def build_derived_series(quotes, events, calendar, *, reference_checks=None, has
                     pri_shares *= ev['ratio']
                     if rc_tri > 0:
                         reinvest_px = quote_map.get(ed)
+                        if not reinvest_px and ed not in cal_idx and (d - ed).days <= 7:
+                            reinvest_px = close
                         if not reinvest_px:
                             breaks.append({'idx': idx, 'date': ed.isoformat(), 'reason': '減資復牌日缺少收盤價'})
                             warnings.append(f'{ed.isoformat()} 減資復牌日缺少收盤價，已設斷點')
@@ -264,12 +266,14 @@ def build_derived_series(quotes, events, calendar, *, reference_checks=None, has
 
             cash_tri = sum(tri_shares * ev['cash'] for ev in daily if ev['kind'] == 'cash')
             for ev in daily:
-                if ev['kind'] == 'stock':
+                if ev['kind'] in ('stock', 'rights_issue'):
                     tri_shares *= ev['ratio']
                     pri_shares *= ev['ratio']
             if cash_tri > 0:
                 div_count += 1
                 reinvest_px = quote_map.get(ed)
+                if not reinvest_px and ed not in cal_idx and (d - ed).days <= 7:
+                    reinvest_px = close
                 if not reinvest_px:
                     breaks.append({'idx': idx, 'date': ed.isoformat(), 'reason': '除息日缺少收盤價'})
                     warnings.append(f'{ed.isoformat()} 除息日缺少收盤價，已設斷點')

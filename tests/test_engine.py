@@ -113,6 +113,30 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(cash, 5.0)
         self.assertFalse(has_inc)
 
+    def test_typhoon_postponed_ex_dividend_uses_next_trading_day_close(self):
+        # 2026-07-10 market closed (typhoon); ex-div postponed to next trading day 2026-07-13.
+        cal = [date(2026, 7, 9), date(2026, 7, 13), date(2026, 7, 14)]
+        quotes = [(date(2026, 7, 9), 69.9), (date(2026, 7, 13), 66.5), (date(2026, 7, 14), 65.0)]
+        events = [{'kind': 'cash', 'date': date(2026, 7, 10), 'cash': 2.5}]
+        res = engine.build_derived_series(quotes, events, cal)
+        self.assertEqual(res['breaks'], [])
+        self.assertEqual(res['div_count'], 1)
+        # Reinvest 2.5 at 66.5 -> shares = 1 + 2.5/66.5 -> TRI = shares * 66.5 / 69.9 * 100
+        expected_day1 = round((1.0 + 2.5 / 66.5) * 66.5 / 69.9 * 100.0, 6)
+        self.assertAlmostEqual(res['tri'][1], expected_day1, places=4)
+
+    def test_cash_rights_issue_ex_right_preserves_continuity_and_passes_gate(self):
+        # 2882 2022-12-05: pure cash capital-increase subscription (44.00 -> 43.16, zero cash/free-stock div)
+        cal = [date(2022, 12, 2), date(2022, 12, 5), date(2022, 12, 6)]
+        quotes = [(date(2022, 12, 2), 44.0), (date(2022, 12, 5), 43.16), (date(2022, 12, 6), 45.0)]
+        events = [{'kind': 'rights_issue', 'date': date(2022, 12, 5), 'ratio': 44.0 / 43.16}]
+        refs = [{'date': date(2022, 12, 5), 'before': 44.0, 'after': 43.16, 'source': 'TWSE TWT49U'}]
+        res = engine.build_derived_series(quotes, events, cal, reference_checks=refs)
+        self.assertEqual(res['gate_errors'], [])
+        self.assertEqual(res['div_count'], 0)
+        self.assertAlmostEqual(res['tri'][1], 100.0, places=4)
+        self.assertAlmostEqual(res['pri'][1], 100.0, places=4)
+
 
 if __name__ == '__main__':
     unittest.main()
