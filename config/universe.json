@@ -66,7 +66,7 @@
         "00924",
         "0050"
       ],
-      "include_market": false
+      "include_market": true
     },
     {
       "id": "bond_etf",
@@ -79,7 +79,7 @@
         "00937B",
         "00933B"
       ],
-      "include_market": false
+      "include_market": true
     }
   ],
   "tickers": [
@@ -136,7 +136,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00692",
@@ -180,7 +180,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00891",
@@ -191,7 +191,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00894",
@@ -202,7 +202,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00935",
@@ -290,7 +290,7 @@
       "category_label": "台股股票型",
       "benchmark_eligible": true,
       "has_price_limit": true,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00940",
@@ -356,7 +356,7 @@
       "category_label": "國外成分股",
       "benchmark_eligible": false,
       "has_price_limit": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "ticker": "00924",
@@ -566,6 +566,17 @@
       "benchmark_eligible": true,
       "has_price_limit": true,
       "enabled": false
+    },
+    {
+      "ticker": "2884",
+      "name": "玉山金",
+      "market": "TWSE",
+      "type": "STOCK",
+      "category": "tw_stock",
+      "category_label": "台股權值股",
+      "benchmark_eligible": true,
+      "has_price_limit": true,
+      "enabled": true
     }
   ]
 }

@@ -119,7 +119,9 @@ export class TrendChart {
       lbl.textContent = s.is_market ? s.name : `${s.ticker} ${s.name}`;
       const num = document.createElement('span');
       num.className = 'tt-val';
-      num.textContent = val === null ? '停牌' : fmtPct(val);
+      num.textContent = val === null
+        ? (s.late_start_idx !== undefined && idx < s.late_start_idx ? '尚未掛牌' : '停牌')
+        : fmtPct(val);
       row.append(dot, lbl, num);
       tip.appendChild(row);
     }
@@ -246,6 +248,18 @@ export function drawPlot(ctx, { x0, y0, width, height, dates, visibleSeries, col
       }
     }
     ctx.stroke();
+    // Mark the 0% entry point for Mode B late-listed series so different start dates are visually clear.
+    if (s.late_start_idx !== undefined && s.late_start_idx > 0 && s.values[s.late_start_idx] !== null) {
+      const sx = xAt(s.late_start_idx);
+      const sy = yAt(s.values[s.late_start_idx]);
+      ctx.setLineDash([]);
+      ctx.fillStyle = tk.bg;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
     ctx.restore();
   }
 

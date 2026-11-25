@@ -27,12 +27,14 @@ const state = {
   includeMarket: true,
   benchmark: MARKET_TICKER,
   mode: 'total_return',
+  lateMode: 'strict',
+  allowAutoAlign: true,
   startDate: '',
   endDate: '',
   focused: new Set(),
   theme: 'light',
   activeTab: 'trend',
-  drawerOpen: false,
+  drawerOpen: true,
   drawerCat: 'tw_equity',
   snapshotMode: null,
   lastComputed: null,
@@ -74,6 +76,7 @@ function saveLocalPicks() {
       selected: state.selected,
       includeMarket: state.includeMarket,
       mode: state.mode,
+      lateMode: state.lateMode,
     }));
   } catch { /* ignore private mode */ }
 }
@@ -103,44 +106,33 @@ function toggleTickerSelection(ticker) {
   }
   state.focused.clear();
   saveLocalPicks();
+  state.allowAutoAlign = true;
   renderPicker();
   updateChart();
 }
 
 function renderPresets() {
-  const bar = document.getElementById('preset-bar');
-  bar.textContent = '';
-  bar.appendChild(el('span', { class: 'muted' }, '觀察範本：'));
-  const validSet = new Set(state.catalog.items.map((i) => i.ticker));
-  for (const p of state.catalog.presets || []) {
-    const b = el('button', { class: 'btn', type: 'button' }, p.label);
-    b.addEventListener('click', () => {
-      state.selected = p.tickers.filter((t) => validSet.has(t)).slice(0, MAX_SERIES - (p.include_market ? 1 : 0));
-      state.includeMarket = Boolean(p.include_market);
-      state.benchmark = state.includeMarket ? MARKET_TICKER : (state.selected[0] || '');
-      state.focused.clear();
-      document.getElementById('include-market').checked = state.includeMarket;
-      saveLocalPicks();
-      renderPicker();
-      updateChart();
-    });
-    bar.appendChild(b);
-  }
+  const sel = document.getElementById('preset-select');
+  sel.textContent = '';
+  sel.appendChild(el('option', { value: '' }, '⚡ 快速組合 ▾'));
+  const presets = state.catalog.presets || [];
+  presets.forEach((p, idx) => {
+    sel.appendChild(el('option', { value: String(idx) }, p.label));
+  });
 }
 
 function renderSelectedChips(byCode) {
   const box = document.getElementById('selected-chips');
   box.textContent = '';
-  box.appendChild(el('span', { class: 'muted', style: 'margin-right:4px' }, '目前已選：'));
 
   if (state.includeMarket) {
     const mPill = el('button', {
       type: 'button',
       class: 'sel-pill market-pill',
-      title: '點擊可取消大盤趨勢',
+      title: `點擊取消 ${state.mode === 'price_only' ? '加權股價指數' : '加權報酬指數'}`,
     });
     mPill.appendChild(el('code', {}, 'TAIEX'));
-    mPill.appendChild(el('span', {}, state.mode === 'price_only' ? '加權股價指數' : '加權報酬指數'));
+    mPill.appendChild(el('span', {}, '大盤'));
     mPill.appendChild(el('span', { class: 'pill-x' }, '✕'));
     mPill.addEventListener('click', () => {
       state.includeMarket = false;
@@ -159,17 +151,16 @@ function renderSelectedChips(byCode) {
     const pill = el('button', {
       type: 'button',
       class: 'sel-pill',
-      title: `點擊移除 ${code}`,
+      title: meta ? `${code} ${meta.name}（點擊移除）` : `點擊移除 ${code}`,
     });
     pill.appendChild(el('code', {}, code));
-    pill.appendChild(el('span', {}, meta ? meta.name : ''));
     pill.appendChild(el('span', { class: 'pill-x' }, '✕'));
     pill.addEventListener('click', () => toggleTickerSelection(code));
     box.appendChild(pill);
   }
 
   if (!state.includeMarket && state.selected.length === 0) {
-    box.appendChild(el('span', { class: 'muted' }, '尚未選擇任何標的（請由下方搜尋或展開分類點選）'));
+    box.appendChild(el('span', { class: 'muted' }, '尚未選取標的（請由下方分類卡片或右上角快速組合點選）'));
   }
 }
 
@@ -218,8 +209,8 @@ function renderCategoryDrawer() {
   const toggleBtn = document.getElementById('btn-toggle-drawer');
   const totalCount = state.catalog.items.length;
   toggleBtn.textContent = state.drawerOpen
-    ? `▲ 收合分類清單（共 ${totalCount} 檔）`
-    : `▼ 展開分類瀏覽標的（共 ${totalCount} 檔）`;
+    ? `▲ 收合`
+    : `▼ 展開（共 ${totalCount} 檔）`;
   toggleBtn.setAttribute('aria-expanded', state.drawerOpen ? 'true' : 'false');
   drawer.classList.toggle('hidden', !state.drawerOpen);
 
@@ -261,10 +252,13 @@ function renderCategoryDrawer() {
     const chip = el('button', {
       type: 'button',
       class: `ticker-chip${isSel ? ' selected' : ''}`,
+      title: `${item.ticker} ${item.name}（${item.category_label} · ${item.market}）`,
     });
-    chip.appendChild(el('strong', {}, item.ticker));
-    chip.appendChild(el('span', {}, item.name));
-    if (isSel) chip.appendChild(el('span', {}, '✓'));
+    const main = el('span', { class: 'tc-main' });
+    main.appendChild(el('strong', {}, item.ticker));
+    main.appendChild(el('span', { class: 'tc-name' }, item.name));
+    chip.appendChild(main);
+    if (isSel) chip.appendChild(el('span', { class: 'tc-check' }, '✓'));
     chip.addEventListener('click', () => toggleTickerSelection(item.ticker));
     grid.appendChild(chip);
   }
@@ -314,7 +308,7 @@ function renderTrendOutput() {
   const defaultTitle = `${ordered.slice(0, 3).map((s) => (s.is_market ? s.name : s.ticker)).join('、')}${ordered.length > 3 ? ` 等 ${ordered.length} 檔` : ''}｜區間比較`;
   document.getElementById('result-heading').textContent = defaultTitle;
   document.getElementById('result-meta').textContent = computed.actualStart
-    ? `${computed.actualStart} ～ ${computed.actualEnd}（${computed.dates.length} 交易日 · ${modeLabel}）`
+    ? `${computed.actualStart} ～ ${computed.actualEnd} 盤後收盤（${computed.dates.length} 交易日 · ${modeLabel}）`
     : '尚無可顯示曲線';
 
   // Cards
@@ -334,11 +328,18 @@ function renderTrendOutput() {
 
     if (benchObj && s.ticker === benchObj.ticker) {
       card.appendChild(el('div', { class: 'sc-diff flat' }, '比較基準（點選可聚焦）'));
+    } else if (benchObj && s.late_start_date) {
+      card.appendChild(el('div', { class: 'sc-diff flat' }, '不同起算日，不計超額'));
     } else if (benchObj) {
       const d = diffSummary(s.total_return_pct, benchObj.total_return_pct);
       card.appendChild(el('div', { class: `sc-diff ${d.direction}` }, d.text));
     } else {
       card.appendChild(el('div', { class: 'sc-diff flat' }, '點選卡片複選比對'));
+    }
+    if (s.late_start_date) {
+      card.appendChild(el('div', { class: 'sc-badge' }, `自 ${s.late_start_date} 上市起算`));
+    } else if (s.start_carried_from) {
+      card.appendChild(el('div', { class: 'sc-badge' }, `沿用 ${s.start_carried_from} 停牌前基準`));
     }
 
     card.addEventListener('click', () => {
@@ -346,6 +347,60 @@ function renderTrendOutput() {
       renderTrendOutput();
     });
     cardsGrid.appendChild(card);
+  }
+
+  // Prominent top banners (between summary cards and chart)
+  const bannersEl = document.getElementById('chart-banners');
+  bannersEl.textContent = '';
+  if (computed.autoAligned) {
+    const b = el('div', { class: 'banner banner-info' });
+    b.appendChild(el(
+      'span',
+      {},
+      `ℹ️ ${computed.autoAligned.tickers.join('、')} 較晚掛牌，已自動改從 ${computed.autoAligned.alignedStart} 與大盤同起點公平比較`,
+    ));
+    const actions = el('div', { class: 'banner-actions' });
+    const backBtn = el('button', { class: 'btn btn-sm', type: 'button' }, `切回原起算日 ${computed.autoAligned.originalStart}`);
+    backBtn.addEventListener('click', () => {
+      state.allowAutoAlign = false;
+      updateChart();
+    });
+    actions.appendChild(backBtn);
+    b.appendChild(actions);
+    bannersEl.appendChild(b);
+  }
+
+  const lateExcluded = computed.excluded.filter((e) => !e.is_market && e.earliest_date);
+  if (lateExcluded.length > 0 && computed.commonEarliestDate) {
+    const b = el('div', { class: 'banner banner-warn' });
+    const names = lateExcluded.map((e) => `${e.ticker} ${e.name}`).join('、');
+    b.appendChild(el(
+      'span',
+      {},
+      `⚠️ ${names} 較晚掛牌，目前起算日（${computed.actualStart}）未列入圖表`,
+    ));
+    const actions = el('div', { class: 'banner-actions' });
+    const alignBtn = el('button', { class: 'btn btn-sm primary', type: 'button' }, `一鍵改從共同起點 ${computed.commonEarliestDate} 重比`);
+    alignBtn.addEventListener('click', () => {
+      state.startDate = computed.commonEarliestDate;
+      state.allowAutoAlign = true;
+      document.getElementById('start-date').value = state.startDate;
+      updateChart();
+    });
+    actions.appendChild(alignBtn);
+    b.appendChild(actions);
+    bannersEl.appendChild(b);
+  }
+
+  if (computed.startHaltNote) {
+    const b = el('div', { class: 'banner banner-info' });
+    b.appendChild(el('span', {}, `ℹ️ ${computed.startHaltNote}`));
+    bannersEl.appendChild(b);
+  }
+  if (computed.endAlignNote) {
+    const b = el('div', { class: 'banner banner-info' });
+    b.appendChild(el('span', {}, `ℹ️ ${computed.endAlignNote}`));
+    bannersEl.appendChild(b);
   }
 
   // Chart
@@ -366,7 +421,7 @@ function renderTrendOutput() {
     haltEl.classList.add('hidden');
   }
 
-  // Excluded box (with one-click earliest-date retry button)
+  // Excluded box (detailed reasons + per-ticker button)
   const exBox = document.getElementById('excluded-box');
   exBox.textContent = '';
   if (computed.excluded.length > 0) {
@@ -376,9 +431,10 @@ function renderTrendOutput() {
       const row = el('div', { class: 'row muted', style: 'margin-bottom:4px' });
       row.appendChild(el('span', {}, `${item.ticker} ${item.name}：${item.reason}`));
       if (item.earliest_date) {
-        const btn = el('button', { class: 'btn', type: 'button', style: 'padding:2px 8px;font-size:0.75rem' }, `改從 ${item.earliest_date} 起算重比`);
+        const btn = el('button', { class: 'btn btn-sm', type: 'button' }, `改從 ${item.earliest_date} 起算重比`);
         btn.addEventListener('click', () => {
           state.startDate = item.earliest_date;
+          state.allowAutoAlign = true;
           document.getElementById('start-date').value = state.startDate;
           updateChart();
         });
@@ -393,7 +449,11 @@ async function updateChart() {
   const tickersToLoad = [...state.selected];
   if (state.includeMarket) tickersToLoad.unshift(MARKET_TICKER);
   if (tickersToLoad.length === 0) {
-    state.lastComputed = { dates: [], series: [], excluded: [], actualStart: null, actualEnd: null, haltNote: null };
+    state.lastComputed = {
+      dates: [], series: [], excluded: [], actualStart: null, actualEnd: null,
+      haltNote: null, startHaltNote: null, endAlignNote: null, autoAligned: null,
+      lateEntryTickers: [], commonEarliestDate: null,
+    };
     renderTrendOutput();
     return;
   }
@@ -402,6 +462,8 @@ async function updateChart() {
     startDate: state.startDate,
     endDate: state.endDate,
     mode: state.mode,
+    lateMode: state.lateMode,
+    allowAutoAlign: state.allowAutoAlign,
   });
   renderTrendOutput();
 }
@@ -410,32 +472,52 @@ function renderEtfTable() {
   const cat = document.getElementById('etf-cat-filter').value;
   const sortBy = document.getElementById('etf-sort').value;
   const years = state.catalog.years || [];
+  const asOf = state.catalog.as_of || state.manifest?.data_date || '';
+  const shortDate = asOf && asOf.length >= 10 ? asOf.slice(5).replace('-', '/') : '';
+  const etfAsof = document.getElementById('etf-asof-badge');
+  if (etfAsof && asOf) {
+    etfAsof.textContent = `（依 ${asOf} 盤後收盤基準 · 含息再投入）`;
+  }
   document.getElementById('survivorship-notice').textContent = state.catalog.survivorship_notice || '';
 
   const medBar = document.getElementById('category-median-bar');
   const medians = state.catalog.category_medians || {};
+  const baseNote = '註：全表「年度勝大盤」均以「加權報酬指數（TAIEX）」為統一對照基準（不含今年 YTD）；國外成分股與債券型另涉匯率及資產波動差異，僅作跨類別機會成本對照參考。';
   if (cat === 'bond' || cat === 'foreign_equity') {
     const m = medians[cat] || {};
     const parts = years.map((y) => (m[String(y)] !== undefined ? `${y}年：${m[String(y)] > 0 ? '+' : ''}${m[String(y)].toFixed(2)}%` : null)).filter(Boolean);
-    medBar.textContent = `同類別年度中位數參考（不與台股加權報酬指數比較）：${parts.join(' ｜ ') || '無'}`;
+    medBar.textContent = `${baseNote} 同類別年度中位數：${parts.join(' ｜ ') || '無'}`;
   } else {
-    medBar.textContent = '註：「年度勝大盤」僅針對台股股票型 ETF 計算（不含今年 YTD），債券型與國外成分 ETF 不適用台股大盤基準。';
+    medBar.textContent = baseNote;
   }
 
-  let rows = state.catalog.items.filter((i) => i.type === 'ETF' && (cat === 'all' || i.category === cat));
+  let rows = state.catalog.items
+    .filter((i) => i.type === 'ETF' && (cat === 'all' || i.category === cat))
+    .map((i) => ({ ...i, is_benchmark: false }));
+
+  const bench = state.catalog.benchmark ? { ...state.catalog.benchmark, is_benchmark: true } : null;
+  if (bench && (sortBy === '1y' || sortBy === 'ytd')) {
+    rows.push(bench);
+  }
+
   rows = [...rows].sort((a, b) => {
     if (sortBy === '1y') return (b.rolling?.['1y'] ?? -Infinity) - (a.rolling?.['1y'] ?? -Infinity);
     if (sortBy === 'ytd') return (b.rolling?.ytd ?? -Infinity) - (a.rolling?.ytd ?? -Infinity);
-    if (sortBy === 'wins') return (b.beat_wins ?? -1) - (a.beat_wins ?? -1) || a.ticker.localeCompare(b.ticker);
+    if (sortBy === 'wins') return (b.beat_wins ?? -1) - (a.beat_wins ?? -1) || (b.rolling?.['1y'] ?? -Infinity) - (a.rolling?.['1y'] ?? -Infinity);
     return a.ticker.localeCompare(b.ticker);
   });
+
+  if (bench && sortBy !== '1y' && sortBy !== 'ytd') {
+    rows.unshift(bench);
+  }
 
   const table = document.getElementById('etf-table');
   table.textContent = '';
 
+  const priceColLabel = shortDate ? `收盤 (${shortDate})` : '最新收盤';
   const thead = document.createElement('thead');
   const hr = document.createElement('tr');
-  for (const label of ['代號', '名稱', '類別', '今年以來', '近 1 年', '勝大盤（完整年）', ...years.map((y) => `${y} 年`)]) {
+  for (const label of ['排名', '代號', '名稱', '類別', priceColLabel, '今年以來', '近 1 年', '勝大盤', ...years.map((y) => `${y} 年`)]) {
     hr.appendChild(el('th', {}, label));
   }
   thead.appendChild(hr);
@@ -448,16 +530,43 @@ function renderEtfTable() {
     return el('td', { class: cls }, `${val > 0 ? '+' : ''}${val.toFixed(2)}%`);
   };
 
+  let rankNum = 0;
   for (const item of rows) {
+    if (item.is_benchmark) {
+      const tr = el('tr', { class: 'row-benchmark' });
+      const rTd = el('td', { class: 'rank-cell' });
+      rTd.appendChild(el('span', { class: 'bench-pill' }, '基準'));
+      tr.appendChild(rTd);
+      tr.appendChild(el('td', {}, item.ticker));
+      tr.appendChild(el('td', {}, `★ ${item.name}`));
+      tr.appendChild(el('td', { class: 'muted' }, item.category_label || '大盤對照'));
+      const idxText = item.last_close != null ? `${Number(item.last_close).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+      tr.appendChild(el('td', {}, idxText));
+      tr.appendChild(fmtCell(item.rolling?.ytd));
+      tr.appendChild(fmtCell(item.rolling?.['1y']));
+      tr.appendChild(el('td', { class: 'num-flat' }, '基準線'));
+      const bByY = new Map((item.calendar_returns || []).map((r) => [r.year, r]));
+      for (const y of years) {
+        const rec = bByY.get(y);
+        tr.appendChild(fmtCell(rec ? rec.total_ret_pct : null));
+      }
+      tbody.appendChild(tr);
+      continue;
+    }
+
+    rankNum += 1;
     const tr = document.createElement('tr');
+    tr.appendChild(el('td', { class: 'rank-cell' }, String(rankNum)));
     tr.appendChild(el('td', {}, item.ticker));
     tr.appendChild(el('td', {}, item.name));
     tr.appendChild(el('td', { class: 'muted' }, item.category_label));
+    const pxText = item.last_close != null ? Number(item.last_close).toFixed(2) : '—';
+    tr.appendChild(el('td', {}, pxText));
     tr.appendChild(fmtCell(item.rolling?.ytd));
     tr.appendChild(fmtCell(item.rolling?.['1y']));
-    const winText = item.benchmark_eligible
-      ? `${item.beat_wins ?? 0} / ${item.comparable_years ?? 0}`
-      : '不適用台股基準';
+    const winText = item.comparable_years != null
+      ? `${item.beat_wins ?? 0} / ${item.comparable_years}`
+      : '—';
     tr.appendChild(el('td', { class: 'num-flat' }, winText));
 
     const byY = new Map((item.calendar_returns || []).map((r) => [r.year, r]));
@@ -482,7 +591,7 @@ function renderStatus() {
     ['資料模式', m.source_mode === 'synthetic_demo' ? '離線合成驗證模式（試跑示範）' : '官方 TWSE／TPEx 盤後衍生指數'],
     ['收錄標的數量', `${m.ticker_count} 檔（含 2 條大盤基準指數）`],
     ['交易日曆天數', `${m.calendar_days} 個交易日`],
-    ['前端資料發布界線', '僅發布本站計算之衍生累積指數（TRI／PRI），不提供原始收盤價檔案下載'],
+    ['前端資料發布界線', '僅發布本站計算之衍生累積指數（TRI／PRI）與最新單日官方收盤價（不提供歷史原始收盤價序列下載）'],
   ];
 
   const tbl = document.createElement('table');
@@ -563,12 +672,32 @@ function bindControls() {
     updateChart();
   });
 
+  document.getElementById('preset-select').addEventListener('change', (e) => {
+    const idx = Number(e.target.value);
+    const presets = (state.catalog && state.catalog.presets) || [];
+    const p = presets[idx];
+    e.target.value = '';
+    if (!p) return;
+    const validSet = new Set(state.catalog.items.map((i) => i.ticker));
+    state.includeMarket = p.include_market !== false;
+    state.selected = p.tickers.filter((t) => validSet.has(t)).slice(0, MAX_SERIES - (state.includeMarket ? 1 : 0));
+    state.benchmark = state.includeMarket ? MARKET_TICKER : (state.selected[0] || '');
+    state.focused.clear();
+    state.allowAutoAlign = true;
+    document.getElementById('include-market').checked = state.includeMarket;
+    saveLocalPicks();
+    renderPicker();
+    updateChart();
+  });
+
   document.getElementById('start-date').addEventListener('change', (e) => {
     state.startDate = e.target.value;
+    state.allowAutoAlign = true;
     updateChart();
   });
   document.getElementById('end-date').addEventListener('change', (e) => {
     state.endDate = e.target.value;
+    state.allowAutoAlign = true;
     updateChart();
   });
   document.getElementById('calc-mode').addEventListener('change', (e) => {
@@ -588,6 +717,7 @@ function bindControls() {
       const end = state.calendar[state.calendar.length - 1];
       state.endDate = end;
       state.startDate = rangeStartDate(end, btn.dataset.range);
+      state.allowAutoAlign = true;
       document.getElementById('start-date').value = state.startDate;
       document.getElementById('end-date').value = state.endDate;
       updateChart();
@@ -606,6 +736,7 @@ function bindControls() {
       startDate: state.startDate,
       endDate: state.endDate,
       mode: state.mode,
+      lateMode: state.lateMode,
       benchmark: state.benchmark,
       title: '',
       snapshotVersion: pinSnapshot ? state.manifest.version : null,
@@ -653,7 +784,7 @@ async function init() {
   state.catalog = catalogJson;
 
   const badge = document.getElementById('data-date-badge');
-  badge.textContent = `資料截至 ${state.manifest.data_date}${state.manifest.source_mode === 'synthetic_demo' ? '（合成試跑）' : ''}`;
+  badge.textContent = `收盤基準：${state.manifest.data_date}（盤後）${state.manifest.source_mode === 'synthetic_demo' ? ' · 合成試跑' : ''}`;
 
   if (state.snapshotMode) {
     const b = document.getElementById('snapshot-banner');

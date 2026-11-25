@@ -25,38 +25,42 @@
   <main class="container">
     <div id="snapshot-banner" class="notice hidden"></div>
 
-    <!-- Tab 1: Return Trend (Layout A: Compact Selected Chips + Search Dropdown + Collapsible Category Drawer) -->
+    <!-- Tab 1: Return Trend (Option 1: Compact Preset Dropdown + Single-Line Selected Bar + Unified Category Grid) -->
     <section id="tab-trend">
       <div class="panel">
         <div class="panel-title">
-          <span>比較標的（單次上限 9 檔含大盤）</span>
-          <span id="selected-counter" class="muted"></span>
+          <span class="row">
+            <span>比較標的（單次上限 9 檔含大盤）</span>
+            <span id="selected-counter" class="muted" style="font-weight:400"></span>
+          </span>
+          <span class="row">
+            <select id="preset-select" class="select select-sm" aria-label="快速套用預設組合">
+              <option value="">⚡ 快速組合 ▾</option>
+            </select>
+            <button id="btn-toggle-drawer" class="btn btn-sm" type="button" aria-expanded="true">▲ 收合</button>
+          </span>
         </div>
 
-        <!-- Row 1: Neutral Preset Templates -->
-        <div class="row" id="preset-bar"></div>
-
-        <!-- Row 2: Active Selected Chips Bar -->
-        <div class="selected-bar" style="margin-top:10px">
+        <!-- Single-Line Compact Selected Chips Bar + Market Toggle + Clear -->
+        <div class="selected-bar selected-bar-inline">
           <div id="selected-chips" class="chips-list"></div>
-        </div>
-
-        <!-- Row 3: Quick Search Dropdown + Collapsible Category Drawer Button -->
-        <div class="row" style="margin-top:10px;position:relative">
-          <div class="search-wrap">
-            <input id="ticker-search" class="input search-input" type="search" placeholder="🔍 輸入代號或名稱直接點選加入（如 0050、2330、美債）" maxlength="30" autocomplete="off">
-            <div id="search-dropdown" class="search-dropdown hidden"></div>
+          <div class="row selected-bar-actions">
+            <label class="row muted" style="gap:4px">
+              <input id="include-market" type="checkbox" checked> 加入大盤
+            </label>
+            <button id="btn-clear" class="btn btn-sm" type="button">清除</button>
           </div>
-          <button id="btn-toggle-drawer" class="btn" type="button" aria-expanded="false">▼ 展開分類瀏覽標的</button>
-          <label class="row muted" style="gap:4px">
-            <input id="include-market" type="checkbox" checked> 加入大盤（TAIEX）
-          </label>
-          <button id="btn-clear" class="btn" type="button">清除選取</button>
         </div>
 
-        <!-- Collapsible Category Drawer (collapsed by default so chart stays high on first screen) -->
-        <div id="category-drawer" class="category-drawer hidden">
-          <div id="drawer-cat-tabs" class="cat-tabs"></div>
+        <!-- Unified Category Tabs + Search + Compact Fixed-Height Card Grid -->
+        <div id="category-drawer" class="category-drawer">
+          <div class="drawer-toolbar">
+            <div id="drawer-cat-tabs" class="cat-tabs"></div>
+            <div class="search-wrap">
+              <input id="ticker-search" class="input search-input" type="search" placeholder="🔍 搜尋代號或名稱（如 0050、2330、美債）" maxlength="30" autocomplete="off">
+              <div id="search-dropdown" class="search-dropdown hidden"></div>
+            </div>
+          </div>
           <div id="ticker-grid" class="ticker-grid-compact"></div>
         </div>
       </div>
@@ -94,6 +98,7 @@
           </span>
         </div>
         <div id="cards-grid" class="cards-grid"></div>
+        <div id="chart-banners" class="banner-stack"></div>
         <div class="chart-wrap">
           <canvas id="trend-canvas"></canvas>
           <div id="chart-tooltip" class="tooltip" hidden></div>
@@ -107,19 +112,22 @@
     <section id="tab-etf" class="hidden">
       <div class="panel">
         <div class="panel-title">
-          <span>ETF 曆年度與滾動含息報酬（與含息趨勢頁共用同一衍生指數）</span>
+          <span class="row">
+            <span>ETF 曆年度與滾動含息報酬</span>
+            <span id="etf-asof-badge" class="muted" style="font-weight:400"></span>
+          </span>
           <span class="row">
             <select id="etf-cat-filter" class="select">
               <option value="all">全部 ETF</option>
-              <option value="tw_equity">台股股票型（可比台股大盤）</option>
-              <option value="foreign_equity">國外成分股（不比台股大盤）</option>
-              <option value="bond">債券型（不比台股大盤）</option>
+              <option value="tw_equity">台股股票型</option>
+              <option value="foreign_equity">國外成分股</option>
+              <option value="bond">債券型</option>
             </select>
             <select id="etf-sort" class="select">
-              <option value="ticker">預設：代號升冪（中性）</option>
-              <option value="1y">近 1 年含息降冪</option>
+              <option value="1y" selected>近 1 年含息降冪（預設）</option>
               <option value="ytd">今年以來含息降冪</option>
-              <option value="wins">勝大盤次數（僅台股股票型）</option>
+              <option value="wins">勝大盤次數降冪</option>
+              <option value="ticker">代號升冪</option>
             </select>
           </span>
         </div>
