@@ -37,10 +37,11 @@ if [[ -z "${COMMIT_MSG// /}" ]]; then
 fi
 
 echo ""
-echo "[3/3] 提交並推送至 GitHub（Cloudflare Pages 將自動部署）..."
+echo "[3/3] 同步遠端並提交推送至 GitHub（Cloudflare Pages 將自動部署）..."
 git add -A
 git commit -m "$COMMIT_MSG"
-git push
+git pull --rebase --autostash -X theirs origin main
+git push origin main
 
 echo ""
 echo "✅ 程式已推送完成！約 10～30 秒後 https://tw-stock-public.pages.dev 將自動更新。"

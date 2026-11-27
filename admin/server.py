@@ -322,7 +322,8 @@ class AdminHandler(BaseHTTPRequestHandler):
                     [py, '-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v'],
                     ['git', 'add', 'config/universe.json', 'web', 'pipeline', 'tests'],
                     ['zsh', '-c', f'if git diff --cached --quiet; then echo "ℹ️ 本機與 GitHub 內容一致，無新變更需提交"; else git commit -m "{safe_msg}"; fi'],
-                    ['git', 'push'],
+                    ['git', 'pull', '--rebase', '--autostash', '-X', 'theirs', 'origin', 'main'],
+                    ['git', 'push', 'origin', 'main'],
                 ],
             )
             if not started:
