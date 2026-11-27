@@ -1,0 +1,25 @@
+{
+  "version": "20261127-231002",
+  "data_date": "2026-11-27",
+  "built_at": "2026-11-27T23:10:03+08:00",
+  "algorithm_version": "tri_ex_close_gross_v1",
+  "source_mode": "official_twse_tpex",
+  "sources": [
+    {
+      "name": "臺灣證券交易所（TWSE）",
+      "items": "上市日行情、加權指數／報酬指數、除權息、減資與 ETF 分割參考價"
+    },
+    {
+      "name": "證券櫃檯買賣中心（TPEx）",
+      "items": "上櫃日行情、除權息與減資參考價"
+    }
+  ],
+  "ticker_count": 44,
+  "calendar_days": 952,
+  "warnings": [],
+  "files": {
+    "calendar": "data/v/20261127-231002/calendar.json",
+    "catalog": "data/v/20261127-231002/catalog.json",
+    "series_prefix": "data/v/20261127-231002/series/"
+  }
+}
