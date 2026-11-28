@@ -1,7 +1,7 @@
 {
-  "version": "20261127-140641",
+  "version": "20261127-211702",
   "data_date": "2026-11-27",
-  "built_at": "2026-11-28T14:06:41+08:00",
+  "built_at": "2026-11-28T21:17:02+08:00",
   "algorithm_version": "tri_ex_close_gross_v1",
   "source_mode": "official_twse_tpex",
   "sources": [
@@ -14,12 +14,12 @@
       "items": "上櫃日行情、除權息與減資參考價"
     }
   ],
-  "ticker_count": 44,
+  "ticker_count": 45,
   "calendar_days": 1442,
   "warnings": [],
   "files": {
-    "calendar": "data/v/20261127-140641/calendar.json",
-    "catalog": "data/v/20261127-140641/catalog.json",
-    "series_prefix": "data/v/20261127-140641/series/"
+    "calendar": "data/v/20261127-211702/calendar.json",
+    "catalog": "data/v/20261127-211702/catalog.json",
+    "series_prefix": "data/v/20261127-211702/series/"
   }
 }
