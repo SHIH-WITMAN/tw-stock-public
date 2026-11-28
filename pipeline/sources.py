@@ -444,8 +444,9 @@ class OfficialStore:
                     drows = det.get('data') or []
                     if drows:
                         c_div = engine.safe_float(drows[0][2]) or 0.0
-                        # Columns 4 & 5: earnings / surplus free shares per 1000 shares
-                        s_free = (engine.safe_float(drows[0][4]) or 0.0) + (engine.safe_float(drows[0][5]) or 0.0)
+                        # Column 4 ONLY: A. 按普通股股東持股比例每千股無償配股
+                        # (Column 5 is B. 員工紅利轉增資 total company shares — NOT per-1000 shareholder stock dividend!)
+                        s_free = engine.safe_float(drows[0][4]) or 0.0
                         # Column 6: cash capital increase (有償現金增資) new shares
                         c_sub = (engine.safe_float(drows[0][6]) or 0.0) if len(drows[0]) > 6 else 0.0
                         if c_div > 0:

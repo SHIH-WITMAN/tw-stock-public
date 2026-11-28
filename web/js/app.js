@@ -7,6 +7,7 @@ import {
   assignColors, computeTrendComparison, orderCards, diffSummary,
   toggleFocus, rangeStartDate, encodeShareParams, decodeShareParams,
 } from './model.js';
+import { backtestRangeStart, computeBacktestComparison } from './backtest.js';
 import { TrendChart } from './chart.js';
 
 const STORAGE_KEY = 'tw_stock_public_picks_v1';
@@ -38,6 +39,20 @@ const state = {
   drawerCat: 'tw_equity',
   snapshotMode: null,
   lastComputed: null,
+  bt: {
+    selected: [],
+    strategy: 'dca',
+    amount: 10000,
+    drip: true,
+    startDate: '',
+    endDate: '',
+    rangePreset: '3y',
+    sortBy: 'roi',
+    expanded: new Set(),
+    pickerOpen: true,
+    pickerCat: 'tw_equity',
+    lastResult: null,
+  },
 };
 
 const chart = new TrendChart(
@@ -84,6 +99,7 @@ function saveLocalPicks() {
       includeMarket: state.includeMarket,
       mode: state.mode,
       lateMode: state.lateMode,
+      btSelected: state.bt.selected,
     }));
   } catch { /* ignore private mode */ }
 }
@@ -96,6 +112,10 @@ function loadLocalPicks(validSet) {
     if (clean.length) state.selected = clean;
     if (typeof raw.includeMarket === 'boolean') state.includeMarket = raw.includeMarket;
     if (raw.mode === 'price_only' || raw.mode === 'total_return') state.mode = raw.mode;
+    if (Array.isArray(raw.btSelected)) {
+      const cleanBt = raw.btSelected.filter((t) => validSet.has(t));
+      if (cleanBt.length) state.bt.selected = cleanBt;
+    }
   } catch { /* ignore */ }
 }
 
@@ -119,13 +139,16 @@ function toggleTickerSelection(ticker) {
 }
 
 function renderPresets() {
-  const sel = document.getElementById('preset-select');
-  sel.textContent = '';
-  sel.appendChild(el('option', { value: '' }, '⚡ 快速組合 ▾'));
   const presets = state.catalog.presets || [];
-  presets.forEach((p, idx) => {
-    sel.appendChild(el('option', { value: String(idx) }, p.label));
-  });
+  for (const id of ['preset-select', 'bt-preset-select']) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    sel.textContent = '';
+    sel.appendChild(el('option', { value: '' }, '⚡ 快速組合 ▾'));
+    presets.forEach((p, idx) => {
+      sel.appendChild(el('option', { value: String(idx) }, p.label));
+    });
+  }
 }
 
 function renderSelectedChips(byCode) {
@@ -280,6 +303,7 @@ function renderPicker() {
   renderSelectedChips(byCode);
   renderCategoryDrawer();
   renderSearchDropdown();
+  renderBacktestPicker(byCode);
 
   // Update benchmark select options
   const bSel = document.getElementById('benchmark-select');
@@ -473,6 +497,292 @@ async function updateChart() {
     allowAutoAlign: state.allowAutoAlign,
   });
   renderTrendOutput();
+  if (state.activeTab === 'backtest') {
+    await updateBacktest();
+  }
+}
+
+function fmtNtd(num) {
+  if (num === null || num === undefined || !Number.isFinite(num)) return '—';
+  const sign = num < 0 ? '-' : '';
+  return `${sign}$${Math.abs(Math.round(num)).toLocaleString('en-US')}`;
+}
+
+function toggleBacktestTicker(code) {
+  const idx = state.bt.selected.indexOf(code);
+  if (idx >= 0) {
+    state.bt.selected.splice(idx, 1);
+  } else {
+    state.bt.selected.push(code);
+  }
+  saveLocalPicks();
+  const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
+  renderBacktestPicker(byCode);
+  updateBacktest();
+}
+
+function renderBacktestPicker(byCode) {
+  const counterEl = document.getElementById('bt-selected-counter');
+  if (!counterEl) return;
+  const totalCount = state.catalog.items.length;
+  counterEl.textContent = `已選 ${state.bt.selected.length}/${totalCount} 檔`;
+
+  const chipsBox = document.getElementById('bt-selected-chips');
+  chipsBox.textContent = '';
+  for (const code of state.bt.selected) {
+    const meta = byCode.get(code);
+    const pill = el('button', {
+      type: 'button',
+      class: 'sel-pill',
+      title: meta ? `${code} ${meta.name}（點擊移除）` : `點擊移除 ${code}`,
+    });
+    pill.appendChild(el('code', {}, code));
+    pill.appendChild(el('span', { class: 'pill-x' }, '✕'));
+    pill.addEventListener('click', () => {
+      toggleBacktestTicker(code);
+    });
+    chipsBox.appendChild(pill);
+  }
+  if (state.bt.selected.length === 0) {
+    chipsBox.appendChild(el('span', { class: 'muted' }, '尚未選取任何標的（可點下方卡片、全選本分類或同步趨勢頁標的）'));
+  }
+
+  const drawer = document.getElementById('bt-picker-drawer');
+  const toggleBtn = document.getElementById('bt-toggle-picker');
+  toggleBtn.textContent = state.bt.pickerOpen ? '▲ 收合選股' : `▼ 展開選股（共 ${totalCount} 檔）`;
+  toggleBtn.setAttribute('aria-expanded', state.bt.pickerOpen ? 'true' : 'false');
+  drawer.classList.toggle('hidden', !state.bt.pickerOpen);
+
+  if (!state.bt.pickerOpen) return;
+
+  const tabsBox = document.getElementById('bt-cat-tabs');
+  tabsBox.textContent = '';
+  const counts = {};
+  for (const item of state.catalog.items) {
+    counts[item.category] = (counts[item.category] || 0) + 1;
+  }
+  counts.all = totalCount;
+
+  for (const grp of CATEGORY_GROUPS) {
+    const c = counts[grp.key] || 0;
+    if (c === 0 && grp.key !== 'all') continue;
+    const tBtn = el('button', {
+      type: 'button',
+      class: `cat-tab${state.bt.pickerCat === grp.key ? ' active' : ''}`,
+    }, `${grp.label} (${c})`);
+    tBtn.addEventListener('click', () => {
+      state.bt.pickerCat = grp.key;
+      renderBacktestPicker(byCode);
+    });
+    tabsBox.appendChild(tBtn);
+  }
+
+  const grid = document.getElementById('bt-ticker-grid');
+  grid.textContent = '';
+  const items = state.catalog.items.filter(
+    (item) => state.bt.pickerCat === 'all' || item.category === state.bt.pickerCat,
+  );
+  for (const item of items) {
+    const isSel = state.bt.selected.includes(item.ticker);
+    const chip = el('button', {
+      type: 'button',
+      class: `ticker-chip${isSel ? ' selected' : ''}`,
+      title: `${item.ticker} ${item.name}（${item.category_label}）`,
+    });
+    const main = el('span', { class: 'tc-main' });
+    main.appendChild(el('strong', {}, item.ticker));
+    main.appendChild(el('span', { class: 'tc-name' }, item.name));
+    chip.appendChild(main);
+    if (isSel) chip.appendChild(el('span', { class: 'tc-check' }, '✓'));
+    chip.addEventListener('click', () => toggleBacktestTicker(item.ticker));
+    grid.appendChild(chip);
+  }
+}
+
+function renderBacktestOutput() {
+  const res = state.bt.lastResult;
+  const tbl = document.getElementById('bt-table');
+  const diffSec = document.getElementById('bt-diff-section');
+  const failBox = document.getElementById('bt-failed-box');
+  if (!tbl) return;
+
+  const isDca = state.bt.strategy === 'dca';
+  document.getElementById('bt-amount-label').textContent = isDca ? '每次投入 NT$' : '投入總額 NT$';
+  document.getElementById('bt-amount-hint').textContent = isDca
+    ? `（每月合計 ${fmtNtd(state.bt.amount * 3)}）`
+    : '（期初一次投入）';
+
+  if (!res) return;
+
+  const dripText = res.drip ? '股息再投入' : '股息領現金';
+  const stratText = isDca
+    ? `每月 5、15、25 日每次 ${fmtNtd(res.amount)}`
+    : `單筆投入 ${fmtNtd(res.amount)}`;
+  document.getElementById('bt-heading').textContent = `比較結果 · 同期間 ${res.samePeriod.length} 檔`;
+  document.getElementById('bt-meta').textContent = `${res.startDate} ～ ${res.endDate} · ${stratText} · ${dripText}`;
+
+  const sorted = [...res.samePeriod].sort((a, b) => {
+    if (state.bt.sortBy === 'final') return b.finalValue - a.finalValue;
+    if (state.bt.sortBy === 'ann') return (b.annualizedPct ?? -Infinity) - (a.annualizedPct ?? -Infinity);
+    if (state.bt.sortBy === 'div') return b.dividendAmount - a.dividendAmount;
+    return b.roiPct - a.roiPct;
+  });
+
+  tbl.textContent = '';
+  const thead = document.createElement('thead');
+  const hr = document.createElement('tr');
+  const divColLabel = res.drip ? '配息投入金額' : '累積現金配息';
+  for (const label of ['排名', '代號', '名稱', '實際投入', '期末總值', divColLabel, '總損益', '總報酬率', '年化報酬', '重點明細']) {
+    hr.appendChild(el('th', {}, label));
+  }
+  thead.appendChild(hr);
+  tbl.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  if (sorted.length === 0) {
+    const tr = document.createElement('tr');
+    const td = el('td', { colspan: '10', class: 'muted', style: 'text-align:center;padding:16px' },
+      res.differentPeriod.length > 0
+        ? '目前所選標的均較晚掛牌，請見下方「不同期間參考」或點選一鍵同期間重比。'
+        : '請先選取至少 1 檔可買賣標的（ETF 或個股）進行回測。');
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  } else {
+    sorted.forEach((r, idx) => {
+      const tr = document.createElement('tr');
+      tr.appendChild(el('td', { class: 'rank-cell' }, String(idx + 1)));
+      tr.appendChild(el('td', {}, r.ticker));
+      tr.appendChild(el('td', {}, r.name));
+      tr.appendChild(el('td', { class: 'num-flat' }, fmtNtd(r.invested)));
+      tr.appendChild(el('td', { style: 'font-family:ui-monospace,monospace;font-weight:700' }, fmtNtd(r.finalValue)));
+      tr.appendChild(el('td', { class: 'num-flat' }, fmtNtd(r.dividendAmount)));
+
+      const profCls = r.totalProfit > 0 ? 'num-pos' : r.totalProfit < 0 ? 'num-neg' : 'num-flat';
+      tr.appendChild(el('td', { class: profCls }, `${r.totalProfit > 0 ? '+' : ''}${fmtNtd(r.totalProfit)}`));
+
+      const roiCls = r.roiPct > 0 ? 'num-pos' : r.roiPct < 0 ? 'num-neg' : 'num-flat';
+      tr.appendChild(el('td', { class: roiCls }, `${r.roiPct > 0 ? '+' : ''}${r.roiPct.toFixed(2)}%`));
+
+      if (r.annualizedPct === null) {
+        const reasonTip = r.annualizedMethod === 'short' ? '持有未滿 1 年不計年化' : '現金流無唯一年化解';
+        tr.appendChild(el('td', { class: 'num-flat', title: reasonTip }, '—'));
+      } else {
+        const annCls = r.annualizedPct > 0 ? 'num-pos' : r.annualizedPct < 0 ? 'num-neg' : 'num-flat';
+        tr.appendChild(el('td', { class: annCls, title: r.annualizedMethod === 'cagr' ? '單筆 CAGR' : '定額 XIRR' },
+          `${r.annualizedPct > 0 ? '+' : ''}${r.annualizedPct.toFixed(2)}%`));
+      }
+
+      const isExp = state.bt.expanded.has(r.ticker);
+      const actTd = document.createElement('td');
+      const expBtn = el('button', { type: 'button', class: 'btn btn-sm' }, isExp ? '收合 ▲' : '展開 ▾');
+      expBtn.addEventListener('click', () => {
+        if (state.bt.expanded.has(r.ticker)) state.bt.expanded.delete(r.ticker);
+        else state.bt.expanded.add(r.ticker);
+        renderBacktestOutput();
+      });
+      actTd.appendChild(expBtn);
+      tr.appendChild(actTd);
+      tbody.appendChild(tr);
+
+      if (isExp) {
+        const dtr = el('tr', { class: 'bt-detail-row' });
+        const dtd = el('td', { colspan: '10' });
+        const grid = el('div', { class: 'bt-detail-grid' });
+
+        const methodLabel = r.annualizedMethod === 'cagr'
+          ? 'CAGR（單筆複利年化）'
+          : r.annualizedMethod === 'xirr'
+            ? 'XIRR（真實現金流年化）'
+            : r.annualizedMethod === 'short'
+              ? '持有未滿 1 年不計年化'
+              : '無唯一年化解';
+
+        const cards = [
+          ['扣款與持有摘要', `${r.buyCount} 次投入 · 持有 ${r.yearsHeld} 年（${r.actualStart} ～ ${r.actualEnd}）`],
+          ['損益結構拆解', `價差 ${r.priceProfit >= 0 ? '+' : ''}${fmtNtd(r.priceProfit)} ／ 配息 ${fmtNtd(r.dividendAmount)}`],
+          ['期間最大回撤（抗跌度）', `${r.maxDrawdownPct.toFixed(2)}%（區間含息走勢最深跌幅）`],
+          ['參與除息與年化口徑', `${r.divCount} 次除息 · ${methodLabel}`],
+        ];
+        for (const [lbl, val] of cards) {
+          const c = el('div', { class: 'bt-detail-card' });
+          c.appendChild(el('div', { class: 'bt-detail-label' }, lbl));
+          c.appendChild(el('div', { class: 'bt-detail-val' }, val));
+          grid.appendChild(c);
+        }
+        dtd.appendChild(grid);
+
+        const yEntries = Object.entries(r.yearlyDiv || {});
+        const yText = yEntries.length > 0
+          ? yEntries.map(([yr, v]) => `${yr}年: ${fmtNtd(v)}`).join(' ｜ ')
+          : '區間內無現金配息';
+        dtd.appendChild(el('div', { class: 'bt-yearly-line' }, `年度配息小計：${yText}`));
+
+        dtr.appendChild(dtd);
+        tbody.appendChild(dtr);
+      }
+    });
+  }
+  tbl.appendChild(tbody);
+
+  // Different period (late-listed) reference section
+  diffSec.textContent = '';
+  if (res.differentPeriod.length > 0) {
+    diffSec.classList.remove('hidden');
+    const head = el('div', { class: 'bt-diff-head' });
+    head.appendChild(el('span', { style: 'font-weight:700' },
+      `⚠️ 不同期間參考（${res.differentPeriod.length} 檔較晚掛牌或區間較短，不混入上方同期間排名）`));
+    if (res.commonEarliestDate) {
+      const alignBtn = el('button', { type: 'button', class: 'btn btn-sm primary' },
+        `一鍵改從 ${res.commonEarliestDate} 同期間重比`);
+      alignBtn.addEventListener('click', () => {
+        state.bt.startDate = res.commonEarliestDate;
+        document.getElementById('bt-start').value = state.bt.startDate;
+        document.querySelectorAll('[data-bt-range]').forEach((b) => b.classList.remove('active'));
+        updateBacktest();
+      });
+      head.appendChild(alignBtn);
+    }
+    diffSec.appendChild(head);
+
+    for (const r of res.differentPeriod) {
+      const item = el('div', { class: 'bt-diff-item' });
+      const left = el('span', {});
+      left.appendChild(el('strong', { style: 'font-family:ui-monospace,monospace;margin-right:6px' }, r.ticker));
+      left.appendChild(el('span', {}, `${r.name} `));
+      left.appendChild(el('span', { class: 'muted' }, `（${r.actualStart} ～ ${r.actualEnd} · 投入 ${r.buyCount} 次）`));
+      const right = el('span', { style: 'font-family:ui-monospace,monospace' });
+      const annStr = r.annualizedPct !== null ? ` · 年化 ${r.annualizedPct > 0 ? '+' : ''}${r.annualizedPct.toFixed(2)}%` : '';
+      right.appendChild(el('span', {}, `投入 ${fmtNtd(r.invested)} → 期末 ${fmtNtd(r.finalValue)}（`));
+      right.appendChild(el('span', { class: r.roiPct >= 0 ? 'num-pos' : 'num-neg' }, `${r.roiPct > 0 ? '+' : ''}${r.roiPct.toFixed(2)}%`));
+      right.appendChild(el('span', {}, `${annStr}）`));
+      item.append(left, right);
+      diffSec.appendChild(item);
+    }
+  } else {
+    diffSec.classList.add('hidden');
+  }
+
+  // Failed tickers
+  failBox.textContent = '';
+  if (res.failed.length > 0) {
+    failBox.appendChild(el('div', { class: 'muted', style: 'font-weight:700;margin-bottom:4px' }, `無法計算（${res.failed.length} 檔）：`));
+    for (const f of res.failed) {
+      failBox.appendChild(el('div', { class: 'muted' }, `${f.ticker} ${f.name}：${f.reason}`));
+    }
+  }
+}
+
+async function updateBacktest() {
+  if (!state.calendar.length) return;
+  const loaded = await Promise.all(state.bt.selected.map((t) => loadSeries(t)));
+  state.bt.lastResult = computeBacktestComparison(loaded, state.calendar, {
+    startDate: state.bt.startDate,
+    endDate: state.bt.endDate,
+    strategy: state.bt.strategy,
+    amount: state.bt.amount,
+    drip: state.bt.drip,
+  });
+  renderBacktestOutput();
 }
 
 function renderEtfTable() {
@@ -632,11 +942,100 @@ function bindControls() {
     btn.addEventListener('click', () => {
       state.activeTab = btn.dataset.tab;
       document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b === btn));
-      ['trend', 'etf', 'status'].forEach((id) => {
+      ['trend', 'etf', 'backtest', 'status'].forEach((id) => {
         document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== state.activeTab);
       });
       if (state.activeTab === 'trend') renderTrendOutput();
+      if (state.activeTab === 'backtest') updateBacktest();
     });
+  });
+
+  // Backtest Comparison controls (independent selection, unlimited cap)
+  document.getElementById('bt-toggle-picker').addEventListener('click', () => {
+    state.bt.pickerOpen = !state.bt.pickerOpen;
+    const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
+    renderBacktestPicker(byCode);
+  });
+  document.getElementById('bt-select-cat').addEventListener('click', () => {
+    const items = state.catalog.items.filter(
+      (item) => state.bt.pickerCat === 'all' || item.category === state.bt.pickerCat,
+    );
+    const merged = new Set(state.bt.selected);
+    for (const item of items) merged.add(item.ticker);
+    state.bt.selected = [...merged];
+    saveLocalPicks();
+    const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
+    renderBacktestPicker(byCode);
+    updateBacktest();
+  });
+  document.getElementById('bt-sync-trend').addEventListener('click', () => {
+    state.bt.selected = [...state.selected];
+    saveLocalPicks();
+    const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
+    renderBacktestPicker(byCode);
+    updateBacktest();
+  });
+  document.getElementById('bt-clear').addEventListener('click', () => {
+    state.bt.selected = [];
+    saveLocalPicks();
+    const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
+    renderBacktestPicker(byCode);
+    updateBacktest();
+  });
+  document.getElementById('bt-preset-select').addEventListener('change', (e) => {
+    const idx = Number(e.target.value);
+    const presets = (state.catalog && state.catalog.presets) || [];
+    const p = presets[idx];
+    e.target.value = '';
+    if (!p) return;
+    const validSet = new Set(state.catalog.items.map((i) => i.ticker));
+    state.bt.selected = p.tickers.filter((t) => validSet.has(t));
+    saveLocalPicks();
+    const byCode = new Map(state.catalog.items.map((i) => [i.ticker, i]));
+    renderBacktestPicker(byCode);
+    updateBacktest();
+  });
+  document.getElementById('bt-strategy').addEventListener('change', (e) => {
+    state.bt.strategy = e.target.value === 'lump' ? 'lump' : 'dca';
+    state.bt.amount = state.bt.strategy === 'lump' ? 300000 : 10000;
+    document.getElementById('bt-amount').value = String(state.bt.amount);
+    updateBacktest();
+  });
+  document.getElementById('bt-amount').addEventListener('input', (e) => {
+    const val = Number(e.target.value);
+    if (Number.isFinite(val) && val >= 100) {
+      state.bt.amount = val;
+      updateBacktest();
+    }
+  });
+  document.getElementById('bt-drip').addEventListener('change', (e) => {
+    state.bt.drip = e.target.value !== 'cash';
+    updateBacktest();
+  });
+  document.getElementById('bt-start').addEventListener('change', (e) => {
+    state.bt.startDate = e.target.value;
+    document.querySelectorAll('[data-bt-range]').forEach((b) => b.classList.remove('active'));
+    updateBacktest();
+  });
+  document.getElementById('bt-end').addEventListener('change', (e) => {
+    state.bt.endDate = e.target.value;
+    document.querySelectorAll('[data-bt-range]').forEach((b) => b.classList.remove('active'));
+    updateBacktest();
+  });
+  document.querySelectorAll('[data-bt-range]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const end = state.calendar[state.calendar.length - 1];
+      state.bt.endDate = end;
+      state.bt.startDate = backtestRangeStart(end, btn.dataset.btRange);
+      document.getElementById('bt-start').value = state.bt.startDate;
+      document.getElementById('bt-end').value = state.bt.endDate;
+      document.querySelectorAll('[data-bt-range]').forEach((b) => b.classList.toggle('active', b === btn));
+      updateBacktest();
+    });
+  });
+  document.getElementById('bt-sort').addEventListener('change', (e) => {
+    state.bt.sortBy = e.target.value;
+    renderBacktestOutput();
   });
 
   document.getElementById('theme-toggle').addEventListener('click', () => {
@@ -807,6 +1206,8 @@ async function init() {
   const latestDate = state.calendar[state.calendar.length - 1];
   state.endDate = latestDate;
   state.startDate = rangeStartDate(latestDate, '1y');
+  state.bt.endDate = latestDate;
+  state.bt.startDate = backtestRangeStart(latestDate, '3y');
 
   loadLocalPicks(validSet);
   const shared = decodeShareParams(window.location.search, validSet);
@@ -818,17 +1219,23 @@ async function init() {
     if (shared.startDate) state.startDate = shared.startDate;
     if (shared.endDate) state.endDate = shared.endDate;
   }
+  if (state.bt.selected.length === 0) {
+    state.bt.selected = [...state.selected];
+  }
 
   document.getElementById('include-market').checked = state.includeMarket;
   document.getElementById('calc-mode').value = state.mode;
   document.getElementById('start-date').value = state.startDate;
   document.getElementById('end-date').value = state.endDate;
+  document.getElementById('bt-start').value = state.bt.startDate;
+  document.getElementById('bt-end').value = state.bt.endDate;
 
   renderPresets();
   renderPicker();
   renderEtfTable();
   renderStatus();
   await updateChart();
+  await updateBacktest();
 }
 
 init().catch((err) => {

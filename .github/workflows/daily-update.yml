@@ -63,7 +63,7 @@ jobs:
       - name: Run Python & JS unit tests
         run: |
           python -B -m unittest discover -s tests -v
-          node --test tests/model.test.mjs
+          node --test tests/model.test.mjs tests/backtest.test.mjs
 
       - name: Record previous data_date
         id: prev

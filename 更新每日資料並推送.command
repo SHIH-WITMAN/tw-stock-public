@@ -15,7 +15,7 @@ echo ""
 echo "[1/3] 執行 Python 與 JS 單元測試..."
 PYTHONPYCACHEPREFIX="$HOME/Library/Caches/tw-stock-public/pycache" "$PYTHON_BIN" -B -m unittest discover -s tests -v
 if command -v node >/dev/null 2>&1; then
-  node --test tests/model.test.mjs
+  node --test tests/model.test.mjs tests/backtest.test.mjs
 fi
 
 echo ""

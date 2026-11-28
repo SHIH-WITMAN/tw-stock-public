@@ -17,6 +17,7 @@
       <nav class="nav" aria-label="主導覽">
         <button class="btn active" data-tab="trend" type="button">含息趨勢</button>
         <button class="btn" data-tab="etf" type="button">ETF 年度報酬</button>
+        <button class="btn" data-tab="backtest" type="button">回測比較</button>
         <button class="btn" data-tab="status" type="button">資料狀態與口徑</button>
         <button id="theme-toggle" class="btn" type="button">深色主題</button>
       </nav>
@@ -140,7 +141,94 @@
       </div>
     </section>
 
-    <!-- Tab 3: Status & Methodology -->
+    <!-- Tab 3: Multi-Ticker Backtest Comparison -->
+    <section id="tab-backtest" class="hidden">
+      <div class="panel">
+        <div class="panel-title">
+          <span class="row">
+            <span>回測比較標的（獨立選股，可全選多檔排名比較）</span>
+            <span id="bt-selected-counter" class="muted"></span>
+          </span>
+          <span class="row">
+            <select id="bt-preset-select" class="select select-sm" aria-label="快速套用回測組合">
+              <option value="">⚡ 快速組合 ▾</option>
+            </select>
+            <button id="bt-select-cat" class="btn btn-sm" type="button">+ 全選本分類</button>
+            <button id="bt-sync-trend" class="btn btn-sm" type="button">同步趨勢頁標的</button>
+            <button id="bt-toggle-picker" class="btn btn-sm" type="button" aria-expanded="true">▲ 收合選股</button>
+          </span>
+        </div>
+
+        <div class="selected-bar selected-bar-inline">
+          <div id="bt-selected-chips" class="chips-list"></div>
+          <div class="row selected-bar-actions">
+            <button id="bt-clear" class="btn btn-sm" type="button">清除</button>
+          </div>
+        </div>
+
+        <div id="bt-picker-drawer" class="category-drawer">
+          <div id="bt-cat-tabs" class="cat-tabs"></div>
+          <div id="bt-ticker-grid" class="ticker-grid-compact"></div>
+        </div>
+      </div>
+
+      <div class="panel bt-gap">
+        <div class="row">
+          <label class="muted">投資方式
+            <select id="bt-strategy" class="select">
+              <option value="dca" selected>每月固定三次（5、15、25 日）</option>
+              <option value="lump">單筆投入</option>
+            </select>
+          </label>
+          <label class="muted">
+            <span id="bt-amount-label">每次投入 NT$</span>
+            <input id="bt-amount" class="input bt-amount-input" type="number" value="10000" min="1000" step="1000">
+            <span id="bt-amount-hint" class="muted">（每月合計 $30,000）</span>
+          </label>
+          <label class="muted">股息處理
+            <select id="bt-drip" class="select">
+              <option value="drip" selected>股息再投入（除息日收盤）</option>
+              <option value="cash">股息領現金</option>
+            </select>
+          </label>
+        </div>
+        <div class="row bt-row-gap">
+          <label class="muted">起始日 <input id="bt-start" class="input" type="date"></label>
+          <label class="muted">結束日 <input id="bt-end" class="input" type="date"></label>
+          <span class="muted">快捷期間：</span>
+          <button class="btn" data-bt-range="1y" type="button">近 1 年</button>
+          <button class="btn active" data-bt-range="3y" type="button">近 3 年</button>
+          <button class="btn" data-bt-range="5y" type="button">近 5 年</button>
+        </div>
+      </div>
+
+      <div class="panel bt-gap">
+        <div class="panel-title">
+          <span class="row">
+            <span id="bt-heading">比較結果</span>
+            <span id="bt-meta" class="muted"></span>
+          </span>
+          <select id="bt-sort" class="select select-sm" aria-label="回測排序方式">
+            <option value="roi" selected>總報酬率降冪（預設）</option>
+            <option value="final">期末總值降冪</option>
+            <option value="ann">年化報酬降冪</option>
+            <option value="div">配息金額降冪</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table id="bt-table"></table>
+        </div>
+
+        <div id="bt-diff-section" class="bt-diff-box hidden"></div>
+        <div id="bt-failed-box" class="bt-failed-box"></div>
+        <div class="muted bt-footnote">
+          註：本頁採「除息日收盤理論再投入／領現」口徑（與含息趨勢、ETF 年度報酬一致）；定期定額固定每月 5、15、25 日扣款（遇休市順延至次一交易日，最長 14 天），大盤指數不可買賣故不列入回測；年化報酬（單筆 CAGR／定額 XIRR）持有未滿 1 年或無唯一解時顯示「—」；未扣除手續費、交易稅與所得稅，歷史績效不代表未來表現。
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Status & Methodology -->
     <section id="tab-status" class="hidden">
       <div class="panel">
         <div class="panel-title"><span>資料狀態、來源顯名與計算口徑</span></div>

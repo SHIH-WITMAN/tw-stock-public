@@ -1,7 +1,7 @@
 {
-  "version": "20261127-153930",
+  "version": "20261127-140641",
   "data_date": "2026-11-27",
-  "built_at": "2026-11-28T15:39:30+08:00",
+  "built_at": "2026-11-28T14:06:41+08:00",
   "algorithm_version": "tri_ex_close_gross_v1",
   "source_mode": "official_twse_tpex",
   "sources": [
@@ -18,8 +18,8 @@
   "calendar_days": 1442,
   "warnings": [],
   "files": {
-    "calendar": "data/v/20261127-153930/calendar.json",
-    "catalog": "data/v/20261127-153930/catalog.json",
-    "series_prefix": "data/v/20261127-153930/series/"
+    "calendar": "data/v/20261127-140641/calendar.json",
+    "catalog": "data/v/20261127-140641/catalog.json",
+    "series_prefix": "data/v/20261127-140641/series/"
   }
 }
