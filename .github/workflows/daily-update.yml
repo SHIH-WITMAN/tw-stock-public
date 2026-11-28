@@ -98,14 +98,29 @@ jobs:
           fi
 
           NEW_DATE=$(python -c "import json; print(json.load(open('web/data/latest.json'))['data_date'])")
-          OLD_DATE="${{ steps.prev.outputs.data_date }}"
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$NEW_DATE" = "$OLD_DATE" ]; then
-            echo "ℹ️ 今日收盤基準日仍為 ${NEW_DATE}（可能逢國定假日休市或尚未公告），排程略過重複推送。"
+
+          # 先暫存剛產好的 web/data，再對齊遠端最新 main 後覆蓋寫入，徹底避免 web/data/v/* rename/rename 衝突
+          rm -rf /tmp/new_web_data
+          cp -R web/data /tmp/new_web_data
+
+          git checkout -- web/data
+          git clean -fd web/data
+          git fetch origin main
+          git checkout -B main origin/main
+
+          CUR_ORIGIN_DATE=$(python -c "import json; print(json.load(open('web/data/latest.json'))['data_date'])" 2>/dev/null || echo "")
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$NEW_DATE" = "$CUR_ORIGIN_DATE" ]; then
+            echo "ℹ️ 遠端已包含 ${NEW_DATE} 最新收盤資料，排程略過重複推送。"
             exit 0
           fi
 
+          rm -rf web/data
+          cp -R /tmp/new_web_data web/data
           git add web/data
+          if git diff --cached --quiet; then
+            echo "ℹ️ 與遠端內容相同，無需推送。"
+            exit 0
+          fi
           git commit -m "data: auto update derived indices (${NEW_DATE})"
-          git pull --rebase --autostash -X theirs origin main
           git push origin main
           echo "✅ 已自動更新至 ${NEW_DATE} 並推送至 main（將觸發 Cloudflare Pages 部署）"
