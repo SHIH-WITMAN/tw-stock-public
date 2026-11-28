@@ -30,7 +30,13 @@ if git diff --cached --quiet; then
 else
   TODAY_STR="$(date '+%Y-%m-%d %H:%M')"
   git commit -m "data: update daily derived indices ($TODAY_STR)"
-  git pull --rebase --autostash -X theirs origin main
+  git fetch origin main
+  if ! git merge -X ours --no-edit origin/main; then
+    git rm -rf --ignore-unmatch web/data/v >/dev/null 2>&1 || true
+    git checkout HEAD -- web/data
+    git add -A web/data
+    git commit --no-edit
+  fi
   git push origin main
   echo ""
   echo "✅ 已推送完成！約 10～30 秒後可至 https://tw-stock-public.pages.dev 查看最新資料。"

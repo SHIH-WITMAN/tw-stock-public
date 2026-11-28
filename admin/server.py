@@ -316,13 +316,19 @@ class AdminHandler(BaseHTTPRequestHandler):
             msg = str(body.get('message') or '').strip() or 'chore: update tickers and derived indices via local admin'
             py = sys.executable
             safe_msg = msg.replace('"', '\\"')
+            sync_cmd = (
+                'git fetch origin main && '
+                '(git merge -X ours --no-edit origin/main || '
+                '(git rm -rf --ignore-unmatch web/data/v >/dev/null 2>&1 || true; '
+                'git checkout HEAD -- web/data && git add -A web/data && git commit --no-edit))'
+            )
             started = _run_subprocess_job(
                 '執行測試並推送至 GitHub（觸發 Cloudflare Pages 部署）',
                 [
                     [py, '-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v'],
                     ['git', 'add', 'config/universe.json', 'web', 'pipeline', 'tests'],
                     ['zsh', '-c', f'if git diff --cached --quiet; then echo "ℹ️ 本機與 GitHub 內容一致，無新變更需提交"; else git commit -m "{safe_msg}"; fi'],
-                    ['git', 'pull', '--rebase', '--autostash', '-X', 'theirs', 'origin', 'main'],
+                    ['zsh', '-c', sync_cmd],
                     ['git', 'push', 'origin', 'main'],
                 ],
             )

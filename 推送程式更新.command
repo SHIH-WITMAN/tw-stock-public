@@ -40,7 +40,13 @@ echo ""
 echo "[3/3] 同步遠端並提交推送至 GitHub（Cloudflare Pages 將自動部署）..."
 git add -A
 git commit -m "$COMMIT_MSG"
-git pull --rebase --autostash -X theirs origin main
+git fetch origin main
+if ! git merge -X ours --no-edit origin/main; then
+  git rm -rf --ignore-unmatch web/data/v >/dev/null 2>&1 || true
+  git checkout HEAD -- web/data
+  git add -A web/data
+  git commit --no-edit
+fi
 git push origin main
 
 echo ""
